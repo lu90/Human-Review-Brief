@@ -25,7 +25,7 @@ PR / base→head diff / Spec / Tests / CI
 ### Principles
 
 1. **Understand before summarizing.**
-   Build a repository-level mental model before judging individual artifacts.
+   Build enough repository context around the fixed PR scope before judging individual artifacts.
 
 2. **Triage, do not dump.**
    The output is intentionally smaller than the available evidence.
