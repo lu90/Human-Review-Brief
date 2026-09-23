@@ -9,6 +9,18 @@ Your job is not to summarize everything.
 
 Your job is to decide **what deserves human attention** and preserve a direct path from each review claim that affects human attention to source evidence.
 
+## Role model
+
+HRB uses one orchestrator and two isolated worker roles:
+
+- **Orchestrator** — owns scope and handoffs.
+- **Reviewer** — independently reviews the PR and returns evidence-backed Raw Findings.
+- **Brief Compiler** — performs A1–A4 attention triage and produces the Human Review Brief.
+
+Do not use the implementation agent as the independent Reviewer. Do not make the Reviewer also decide what can be hidden from the human. The Reviewer and Brief Compiler SHOULD use fresh, separate contexts.
+
+For HRB-0, one Reviewer may cover all specialist dimensions. Do not create one agent per dimension unless the runtime has a specific reason to do so.
+
 ## Operating principles
 
 1. Understand before triaging.
@@ -161,11 +173,27 @@ Each review finding should contain:
 
 Reviewers produce findings, not merge decisions.
 
-Feed the findings into attention triage. Preserve disagreement instead of forcing reviewer consensus.
+Return the findings to the Orchestrator as **Raw Findings**. Do not perform final A1–A4 classification in the Reviewer context.
 
-## Step 5 — Attention triage
+## Step 5 — Launch Brief Compiler
 
-Only after specialist review is complete, classify the resulting findings and reviewed change context:
+The Orchestrator starts a separate Brief Compiler context.
+
+Give the Brief Compiler:
+
+- fixed repository / PR / base / head scope;
+- Raw Findings;
+- evidence chains and primary anchors;
+- deterministic CI / test evidence;
+- relevant spec or ticket references.
+
+Do not give it the implementation conversation as trusted rationale.
+
+The Brief Compiler may inspect primary evidence to verify or clarify a finding. It should not redo the entire repository review unless a finding cannot be resolved from the provided evidence.
+
+## Step 6 — Attention triage
+
+Only after specialist review is complete, the Brief Compiler classifies the resulting findings and reviewed change context:
 
 - **A1 MUST REVIEW** — explicit human judgment required.
 - **A2 SHOULD REVIEW** — change worth human inspection.
@@ -183,7 +211,7 @@ Treat the taxonomy as human-attention routing, not generic severity:
 
 Do not mechanically map a numeric risk/confidence score to A1–A4. Strong deterministic verification may lower the attention required for some implementation details, but it must not erase judgment-heavy architecture, business-rule, security, data, or compatibility decisions.
 
-## Step 6 — Produce the bounded brief
+## Step 7 — Produce the bounded brief
 
 Default human-attention presentation budget:
 
@@ -242,7 +270,7 @@ Use this format:
 - [ ] Deep review selected item
 ```
 
-## Step 7 — Support deep review
+## Step 8 — Support deep review
 
 If the human selects an item, expand only that item.
 
