@@ -1,0 +1,20 @@
+name: HRB contract validation
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate HRB contracts and fixtures
+        run: ruby scripts/validate_contracts.rb
