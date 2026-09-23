@@ -35,9 +35,11 @@ If this is round 2+, also confirm that the fresh full review ran before the sepa
 
 If `.hrb/REVIEW_POLICY.md` changed, inspect that policy diff directly. A proposed policy change is human-owned and cannot authorize itself within the same PR.
 
-Then read **Decisions requiring human judgment** and **MUST REVIEW**.
+Then read **Decisions requiring human judgment** and the complete **Findings by attention** section (or every partition listed in its index).
 
-For each item ask:
+A1–A4 only determines reading order. It does not mean "must read" versus "safe to skip". Read every finding summary; open underlying evidence only where additional context is useful.
+
+For each material item ask:
 
 - Is this genuinely a decision I need to own?
 - What happens if this assumption is wrong?
@@ -50,7 +52,7 @@ If a decision is vague, redirect:
 
 ## Gate 3 — Targeted evidence (~2–8 minutes)
 
-Open only the recommended deep reads that correspond to unresolved decisions or A1 findings.
+Open only the recommended deep reads that correspond to unresolved decisions or findings whose summaries are not sufficient for you to judge.
 
 Ask:
 
@@ -82,13 +84,13 @@ Pause the review and re-scope when:
 
 - the fixed point is wrong;
 - the diff is much larger than expected;
-- the number of A1 findings makes the PR impractical to review as one bounded unit;
-- an A1 item has no source evidence;
+- the total finding set makes one brief impractical to review as a bounded unit and has not been partitioned;
+- a finding has no source evidence;
 - the brief repeatedly sends you to unrelated files;
 - the change crosses an architecture/data/security boundary that was not expected;
 - the brief cannot explain what can safely be skipped.
 
-When the problem is simply review size, prefer splitting the PR or reviewing explicit risk clusters. Do not waive A1 findings to make the review shorter.
+When the problem is simply review size, prefer partitioning the brief by topic/module/risk cluster, or splitting the PR when the implementation itself is too broad. Do not hide lower-priority findings to make the review shorter.
 
 ## Decision
 
