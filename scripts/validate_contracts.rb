@@ -13,6 +13,15 @@ VALID_EVIDENCE_ROLES = %w[
   ci_anchor
   absence_evidence
 ].freeze
+VALID_ISOLATION = %w[achieved unavailable].freeze
+VALID_COVERAGE = %w[reviewed_with_findings reviewed_no_finding].freeze
+VALID_REMEDIATION_STATUS = %w[
+  resolved
+  partially_resolved
+  unresolved
+  superseded
+  cannot_verify
+].freeze
 
 REQUIRED_CASE_IDS = %w[
   C01_FORMATTING_ONLY
@@ -54,11 +63,23 @@ def walk(value, path = [], &block)
   end
 end
 
+def require_path(root, id, path, expected = :__any__)
+  value = root.dig(*path)
+  fail_contract("#{id}: missing #{path.join(".")}") if value.nil?
+  return value if expected == :__any__
+  fail_contract("#{id}: #{path.join(".")} expected #{expected.inspect}, got #{value.inspect}") unless value == expected
+  value
+end
+
+def require_nonempty_string(value, label)
+  fail_contract("#{label} must be a non-empty string") unless value.is_a?(String) && !value.empty?
+end
+
 cases_path = "fixtures/hrb-0/cases.yaml"
 round_path = "fixtures/hrb-0/review-round-record.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
 
-[ cases_path, round_path, policy_path ].each do |path|
+[cases_path, round_path, policy_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
@@ -99,34 +120,108 @@ cases.each do |item|
   end
 end
 
+by_id = cases.to_h { |item| [item["id"], item] }
+
+# Level-2 deterministic protection: canonical behavioral invariants must not silently erode.
+c05 = by_id.fetch("C05_LARGE_MIGRATION_MANY_A1")
+require_path(c05, "C05", %w[expected brief preserve_all_findings], true)
+require_path(c05, "C05", %w[expected brief attention_is_ordering_not_filtering], true)
+require_path(c05, "C05", %w[expected brief partition_when_needed], true)
+
+c07 = by_id.fetch("C07_REVIEW_COVERAGE_MANIFEST")
+require_path(c07, "C07", %w[expected reviewer must_emit_review_coverage_manifest], true)
+require_path(c07, "C07", %w[expected reviewer omitted_dimension_counts_as_no_finding], false)
+dims = require_path(c07, "C07", %w[expected reviewer required_dimensions])
+fail_contract("C07: required_dimensions must exactly match HRB specialist dimensions") unless dims == DIMENSIONS
+require_path(c07, "C07", %w[expected brief must_expose_review_coverage_manifest], true)
+require_path(c07, "C07", %w[expected brief must_expose_isolation_status], true)
+
+c08 = by_id.fetch("C08_POLICY_CHANGE_SAME_PR")
+require_path(c08, "C08", %w[expected reviewer active_policy_source], "base_sha")
+require_path(c08, "C08", %w[expected reviewer proposed_head_policy_is_review_evidence], true)
+require_path(c08, "C08", %w[expected reviewer policy_change_requires_explicit_human_review], true)
+require_path(c08, "C08", %w[expected brief attention], "A1")
+require_path(c08, "C08", %w[expected brief human_decision_required], true)
+
+c09 = by_id.fetch("C09_REDACTED_EVIDENCE")
+%w[
+  sensitive_payload_redacted
+  preserve_source_reference
+  preserve_claim_relationship
+  preserve_access_boundary
+].each { |key| require_path(c09, "C09", ["expected", "evidence", key], true) }
+
+c10 = by_id.fetch("C10_REMEDIATION_ROUND")
+require_path(c10, "C10", %w[expected fresh_review scope], "base_to_current_head")
+require_path(c10, "C10", %w[expected fresh_review prior_findings_visible_to_reviewer], false)
+require_path(c10, "C10", %w[expected remediation_review scope], "previous_review_head_to_current_head")
+require_path(c10, "C10", %w[expected remediation_review prior_findings_available], true)
+statuses = require_path(c10, "C10", %w[expected remediation_review allowed_status])
+fail_contract("C10: remediation statuses drifted") unless statuses == VALID_REMEDIATION_STATUS
+require_path(c10, "C10", %w[expected artifact review_round_record_required], true)
+
+c11 = by_id.fetch("C11_ISOLATION_UNAVAILABLE")
+require_path(c11, "C11", %w[expected reviewer isolation_status], "unavailable")
+require_path(c11, "C11", %w[expected brief must_disclose_isolation_failure], true)
+require_path(c11, "C11", %w[expected brief must_not_present_self_review_as_independent], true)
+
 round = YAML.safe_load(File.read(round_path), aliases: false)
-required_round_keys = %w[
-  schema_version
-  artifact
-  repository
-  pr
-  round
-  base_sha
-  current_review_head
-  fresh_review
-  brief
-]
-required_round_keys.each do |key|
-  fail_contract("review-round example missing #{key}") unless round.key?(key)
+fail_contract("review-round example must be a mapping") unless round.is_a?(Hash)
+fail_contract("review-round schema_version must be 1") unless round["schema_version"] == 1
+fail_contract("review-round artifact must be hrb-review-round-record") unless round["artifact"] == "hrb-review-round-record"
+require_nonempty_string(round["repository"], "repository")
+fail_contract("pr must be a positive integer") unless round["pr"].is_a?(Integer) && round["pr"] > 0
+fail_contract("round must be a positive integer") unless round["round"].is_a?(Integer) && round["round"] > 0
+
+%w[base_sha current_review_head].each do |key|
+  value = round[key]
+  fail_contract("review-round example missing #{key}") if value.nil?
+  fail_contract("#{key} must be a 40-char SHA") unless value.match?(/\A[0-9a-f]{40}\z/)
 end
 
-%w[base_sha current_review_head previous_review_head].each do |key|
-  next if round[key].nil?
-  fail_contract("#{key} must be a 40-char SHA") unless round[key].match?(/\A[0-9a-f]{40}\z/)
+if round["round"] >= 2
+  previous = round["previous_review_head"]
+  fail_contract("round 2+ requires previous_review_head") if previous.nil?
+  fail_contract("previous_review_head must be a 40-char SHA") unless previous.match?(/\A[0-9a-f]{40}\z/)
 end
 
-coverage = round.dig("fresh_review", "coverage_manifest")
+fresh = round["fresh_review"]
+fail_contract("review-round example missing fresh_review") unless fresh.is_a?(Hash)
+fail_contract("fresh_review.scope must be base_to_current_head") unless fresh["scope"] == "base_to_current_head"
+fail_contract("fresh reviewer must not receive prior findings") unless fresh["prior_findings_visible_to_reviewer"] == false
+fail_contract("invalid reviewer_isolation") unless VALID_ISOLATION.include?(fresh["reviewer_isolation"])
+require_nonempty_string(fresh["raw_findings_ref"], "fresh_review.raw_findings_ref")
+
+coverage = fresh["coverage_manifest"]
 fail_contract("review-round example missing coverage_manifest") unless coverage.is_a?(Hash)
-missing_dimensions = DIMENSIONS - coverage.keys
-fail_contract("coverage manifest missing dimensions: #{missing_dimensions.join(", ")}") unless missing_dimensions.empty?
+fail_contract("coverage manifest dimensions must exactly match HRB dimensions") unless coverage.keys.sort == DIMENSIONS.sort
+coverage.each do |dimension, status|
+  fail_contract("#{dimension}: invalid coverage status #{status}") unless VALID_COVERAGE.include?(status)
+end
 
-policy = File.read(policy_path)
-fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy.include?("## Active-policy rule")
-fail_contract("REVIEW_POLICY.md must pin current review to PR base policy") unless policy.include?("PR base SHA")
+if round["round"] >= 2
+  remediation = round["remediation_verification"]
+  fail_contract("round 2+ requires remediation_verification") unless remediation.is_a?(Hash)
+  fail_contract("remediation_verification.performed must be true") unless remediation["performed"] == true
+  fail_contract("invalid remediation scope") unless remediation["scope"] == "previous_review_head_to_current_head"
+  require_nonempty_string(remediation["prior_round_ref"], "remediation_verification.prior_round_ref")
+  results = remediation["results"]
+  fail_contract("remediation results must be a non-empty array") unless results.is_a?(Array) && !results.empty?
+  results.each_with_index do |result, index|
+    require_nonempty_string(result["prior_finding_id"], "remediation result #{index}.prior_finding_id")
+    fail_contract("remediation result #{index}: invalid status") unless VALID_REMEDIATION_STATUS.include?(result["status"])
+    require_nonempty_string(result["evidence_ref"], "remediation result #{index}.evidence_ref")
+  end
+end
+
+brief = round["brief"]
+fail_contract("review-round example missing brief") unless brief.is_a?(Hash)
+fail_contract("invalid compiler_isolation") unless VALID_ISOLATION.include?(brief["compiler_isolation"])
+require_nonempty_string(brief["brief_ref"], "brief.brief_ref")
+
+policy_text = File.read(policy_path)
+fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")
+fail_contract("REVIEW_POLICY.md must pin current review to PR base policy") unless policy_text.include?("PR base SHA")
+fail_contract("REVIEW_POLICY.md must prohibit instruction delegation") unless policy_text.include?("MUST NOT delegate Reviewer-instruction authority")
 
 puts "HRB contract validation passed."
