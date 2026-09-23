@@ -201,7 +201,9 @@ Operations / Observability    reviewed — 1 finding
 Performance / Compatibility   reviewed — no finding
 Adversarial Challenge         reviewed — 1 finding
 
-Reviewer isolation: achieved
+Reviewer isolation:
+  status: achieved
+  method: fresh_context
 ```
 
 Reviewers produce findings, not merge decisions.
@@ -240,7 +242,7 @@ Give the Brief Compiler:
 
 - fixed repository / PR / base / head scope;
 - Raw Findings;
-- Review Coverage Manifest and Reviewer isolation status;
+- Review Coverage Manifest and Reviewer isolation status/method;
 - remediation-verification results when this is round 2+;
 - evidence chains and primary anchors;
 - deterministic CI / test evidence;
@@ -302,7 +304,7 @@ Use this format:
 ## Review scope
 
 ## Review execution
-Reviewer isolation, Brief Compiler isolation, and Review Coverage Manifest.
+Reviewer isolation status/method, Brief Compiler isolation status/method, and Review Coverage Manifest.
 
 ## Remediation verification
 For round 2+, previous-head→current-head remediation status for prior findings.
