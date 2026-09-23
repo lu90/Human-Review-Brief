@@ -69,10 +69,13 @@ Pause the review and re-scope when:
 
 - the fixed point is wrong;
 - the diff is much larger than expected;
+- the number of A1 findings makes the PR impractical to review as one bounded unit;
 - an A1 item has no source evidence;
 - the brief repeatedly sends you to unrelated files;
 - the change crosses an architecture/data/security boundary that was not expected;
 - the brief cannot explain what can safely be skipped.
+
+When the problem is simply review size, prefer splitting the PR or reviewing explicit risk clusters. Do not waive A1 findings to make the review shorter.
 
 ## Decision
 
