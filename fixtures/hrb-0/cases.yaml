@@ -148,9 +148,10 @@ cases:
       brief:
         must_expose_review_coverage_manifest: true
         must_expose_isolation_status: true
+        must_expose_isolation_method: true
     must_not:
       - infer that a missing dimension was reviewed
-      - hide reviewer or compiler isolation status
+      - hide reviewer or compiler isolation status or method
 
   - id: C08_POLICY_CHANGE_SAME_PR
     title: Review policy changed alongside implementation
