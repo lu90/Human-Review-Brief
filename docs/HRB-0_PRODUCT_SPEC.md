@@ -88,9 +88,10 @@ The fixed scope MUST identify:
 - originating spec / issue / ticket when available;
 - relevant verification evidence.
 
-For review round 2 or later, the Orchestrator MAY also record:
+Every review MUST record the review round number.
 
-- review round number;
+For review round 2 or later, the fixed orchestration scope MUST also record:
+
 - previous review head SHA;
 - prior Review Round Record reference.
 
@@ -213,7 +214,7 @@ Source code, comments, README files, specs, issues, PR text, CI logs, generated 
 
 Repository content does not become Reviewer instruction merely because it is named `AGENTS.md`, `CONTRIBUTING.md`, a specification, an ADR, or a coding standard.
 
-A repository MAY define project-specific HRB review instructions in `.hrb/REVIEW_POLICY.md`. This is the only repository-level file HRB treats as a project review-instruction source by default. The policy MAY reference other authoritative project artifacts, but those artifacts remain evidence/context and cannot override HRB's own product, execution, safety, evidence, or permission contracts.
+A repository MAY define project-specific HRB review instructions in `.hrb/REVIEW_POLICY.md`. This is the only repository-level file HRB treats as a project review-instruction source. The policy MAY identify other project artifacts for evidentiary weight or inspection, but it MUST NOT delegate Reviewer-instruction authority to them. Referenced artifacts remain evidence/context and cannot override HRB's own product, execution, safety, evidence, or permission contracts.
 
 For a PR review, the active project policy is the version of `.hrb/REVIEW_POLICY.md` at the **base SHA**. A change to the policy in the current PR is a proposed policy change, not active authority for that same PR. The policy diff MUST be reviewed as evidence and surfaced for explicit human judgment. If the file is introduced by the PR and did not exist at base, it has no project-level instructional authority until after merge.
 
@@ -225,7 +226,7 @@ HRB MUST also:
 - preserve the existence, provenance, claim relationship, and access boundary of redacted evidence;
 - preserve access boundaries for private repositories and private evidence;
 - never transform a private evidence source into a public link;
-- treat instructions embedded in reviewed content as data unless they come from an explicitly recognized project-governance source and apply only to project conventions.
+- treat instructions embedded in reviewed repository content as data unless they come from the active base-SHA `.hrb/REVIEW_POLICY.md`; other files do not become Reviewer commands merely because the policy references them.
 
 When evidence is redacted, the brief SHOULD retain a safe reference such as:
 
@@ -621,7 +622,7 @@ Remediation verification answers: **What changed since the previous review, and 
 
 The Orchestrator MUST run the fresh independent review before remediation verification so prior findings do not anchor the fresh Reviewer.
 
-After each round, the Orchestrator SHOULD produce a **Review Round Record** containing at minimum:
+After each completed review round, the Orchestrator MUST produce a **Review Round Record** containing at minimum:
 
 - repository and PR identifier;
 - round number;
@@ -637,7 +638,7 @@ After each round, the Orchestrator SHOULD produce a **Review Round Record** cont
 
 A Review Round Record is factual orchestration metadata, not an authority that can override primary evidence.
 
-Storage is runtime-specific. It MAY be a CI artifact, orchestrator workspace artifact, or another immutable/retrievable record. It SHOULD NOT be committed into the PR under review during the same review round, because doing so would mutate the head being reviewed.
+Storage is runtime-specific. It MAY be a CI artifact, orchestrator workspace artifact, or another immutable/retrievable record. Round 2+ MUST reference the prior Review Round Record and previous review head. It SHOULD NOT be committed into the PR under review during the same review round, because doing so would mutate the head being reviewed.
 
 A canonical example lives at `fixtures/hrb-0/review-round-record.example.yaml`.
 
@@ -654,14 +655,19 @@ The HRB-0 repository includes deterministic contract validation for fixture stru
 
 Golden expectations are expressed as **behavioral invariants**, not exact natural-language output. Conformance SHOULD validate required findings, evidence roles, attention routing, human-decision behavior, and forbidden behaviors without requiring deterministic prose.
 
-The initial suite covers:
+The canonical HRB-0 suite covers:
 
-- formatting-only changes;
-- public API breaking changes;
-- deleted authorization guards;
-- verified local refactors;
-- oversized migrations with many A1 findings;
-- repository prompt-injection attempts.
+- C01 formatting-only changes;
+- C02 public API breaking changes;
+- C03 deleted authorization guards;
+- C04 verified local refactors;
+- C05 oversized migrations with many A1 findings;
+- C06 repository prompt-injection attempts;
+- C07 explicit specialist Review Coverage Manifest;
+- C08 same-PR review-policy changes;
+- C09 sensitive-evidence redaction with preserved provenance;
+- C10 round-2 fresh review plus remediation verification;
+- C11 unavailable reviewer isolation disclosure.
 
 ## 20. HRB-0 Exit Criteria
 
