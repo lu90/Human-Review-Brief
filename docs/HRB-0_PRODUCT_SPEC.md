@@ -360,7 +360,7 @@ Required structure:
 Fixed point, head, spec/ticket sources, verification sources, and review-round metadata when applicable.
 
 ## Review execution
-Reviewer isolation status, Brief Compiler isolation status, and Review Coverage Manifest for all required specialist dimensions.
+Reviewer isolation status/method, Brief Compiler isolation status/method, and Review Coverage Manifest for all required specialist dimensions.
 
 ## Remediation verification
 For review round 2+, summarize previous-head→current-head remediation results without replacing the fresh base→current-head review.
