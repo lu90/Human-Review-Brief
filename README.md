@@ -13,7 +13,7 @@ PR / base→head diff / Spec / Tests / CI
                 ↓
          Evidence Collection
                 ↓
-      Independent Agent Review
+      Independent Specialist Review
                 ↓
         Attention Triage
                 ↓
@@ -50,7 +50,7 @@ The default review moment is before a pull request is merged. The fixed review s
 
 HRB-0 intentionally does **not** require a persisted repository-understanding cache or an invalidation engine. A later version may add one if repeated context reconstruction becomes a demonstrated bottleneck.
 
-The review pipeline classifies findings by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown brief with evidence chains and deep links such as:
+Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. Only after review does HRB classify findings by **human-attention value**, explain the relevant risk dimensions, and generate a compact Markdown brief with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168
@@ -65,7 +65,7 @@ CI run #456
 # Human Review Brief
 
 ## 1. What changed
-Up to 5 material changes.
+Up to 5 notable changes.
 
 ## 2. Decisions requiring human judgment
 Up to 3 explicit decisions.
