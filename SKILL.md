@@ -203,6 +203,8 @@ If the review exceeds these limits:
 - preserve the full evidence set for targeted deep review;
 - never silently discard findings to satisfy the brief budget.
 
+If A1 volume makes the brief too large for a normal bounded review, keep every A1 visible and recommend splitting the PR or reviewing explicit risk clusters. Do not compress away required human review just to satisfy the time target.
+
 For every A1/A2 item provide:
 
 1. what changed / what is uncertain;
