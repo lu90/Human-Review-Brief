@@ -63,20 +63,79 @@ If only local/uncommitted evidence exists, fall back to `path:line-range` and ex
 
 Do not treat an implementation agent's explanation as evidence by itself.
 
-## Step 4 — Run independent review axes when useful
+## Step 4 — Independent Agent Review Gate
 
-Possible axes include:
+For any material review, run an independent agent review before attention triage.
 
-- spec alignment;
+### 4.1 Isolate the reviewer
+
+Do not let the implementation agent simply review its own narrative.
+
+Give the reviewer a bounded review package:
+
+- fixed point / base and review head;
+- relevant repository baseline;
+- spec / issue / tickets;
+- actual diff or changed artifacts;
+- deterministic verification evidence;
+- relevant standards and architecture contracts.
+
+Prefer a separate sub-agent or fresh context that does not inherit the implementation conversation.
+
+If true isolation is unavailable, explicitly report **independent review unavailable**. Do not relabel self-review as independent review.
+
+### 4.2 Review to disconfirm
+
+The reviewer is not asked to prove the implementation correct.
+
+Actively search for:
+
+- missing or partial requirements;
+- wrong assumptions;
+- scope creep;
+- architecture or boundary violations;
+- correctness defects and edge cases;
+- over-engineering / speculative abstractions;
+- weak or misleading tests;
+- verification gaps;
+- security, data, compatibility, or operational risks;
+- counterexamples and credible alternative designs.
+
+### 4.3 Required axes
+
+For material changes, cover at least:
+
+- spec / scope alignment;
+- architecture / correctness;
+- tests / verification;
+- adversarial challenge.
+
+Add specialist axes when relevant:
+
 - standards;
-- architecture;
-- correctness;
-- tests and verification;
 - security/privacy;
 - data/migrations;
-- operations.
+- operations/observability;
+- performance;
+- compatibility.
 
-Keep axes independent where possible so one reviewer's assumptions do not contaminate another.
+Keep axes independent where practical so one reviewer's assumptions do not contaminate another.
+
+If an axis is skipped, record why.
+
+### 4.4 Reviewer output contract
+
+Each material finding should contain:
+
+1. claim;
+2. why it matters;
+3. primary evidence anchor;
+4. affected risk dimensions;
+5. unresolved question, counterexample, or alternative interpretation.
+
+Reviewers produce findings, not merge decisions.
+
+Feed the findings into attention triage. Preserve disagreement instead of forcing reviewer consensus.
 
 ## Step 5 — Attention triage
 
@@ -172,6 +231,7 @@ Stop and surface the issue instead of compressing it away when:
 - repository context is too stale to interpret the change;
 - a destructive/data/security change lacks verification;
 - the implementation materially exceeds the spec;
+- a material review lacks independent agent review or clearly disclosed isolation limitations;
 - an important claim has no traceable evidence;
 - the requested review scope has expanded enough that a new brief is warranted.
 
