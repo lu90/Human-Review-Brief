@@ -49,7 +49,7 @@ Identify only the context needed to interpret the review:
 - authoritative docs;
 - generated / low-value areas.
 
-On later runs, refresh affected areas instead of blindly re-reading the whole repository.
+On later runs, use **Baseline + Invalidation**: detect which repository-understanding sections are stale, refresh only those areas, and preserve unaffected context. Trigger a broader rebuild only when structural changes invalidate the existing model.
 
 ## Step 3 — Collect evidence
 
