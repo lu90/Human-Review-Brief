@@ -141,6 +141,19 @@ https://github.com/<owner>/<repo>/blob/<commit>/<path>#L120-L168
 
 Branch-only links SHOULD be avoided for review evidence when a commit SHA is available because line numbers can drift.
 
+For material findings, stable source anchors are REQUIRED whenever technically available. Repository artifacts SHOULD default to commit-pinned permalinks. Evidence anchors MUST point to primary source evidence rather than merely to another AI-generated summary or review report.
+
+Preferred anchor forms:
+
+- code: commit SHA + file + line range;
+- Markdown/spec: commit SHA + file + heading or line range;
+- PR/issue/discussion: stable item reference;
+- CI: workflow run + job, and step when needed;
+- tests: commit SHA + test file + test name or line range;
+- schema/migration: commit SHA + artifact + line range.
+
+When only local or otherwise unstable evidence is available, HRB MAY fall back to a path-and-line reference such as `src/service.ts:120-168`, but it MUST label that anchor as unstable/local rather than presenting it as a permanent link.
+
 ## 7. Attention Triage
 
 HRB classifies by **human attention**, not merely severity.
