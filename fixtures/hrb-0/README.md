@@ -37,4 +37,4 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C10_REMEDIATION_ROUND` — fresh full review remains isolated from remediation verification.
 - `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
 
-The cases are defined in `cases.yaml`. A Review Round Record example is provided separately.
+The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+.
