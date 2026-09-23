@@ -216,6 +216,8 @@ Attention level SHOULD be justified using explicit dimensions rather than a myst
 
 The explanation matters more than the label.
 
+The A1–A4 taxonomy answers **how much human attention is required**. Risk dimensions answer **why that attention is required**. HRB MUST NOT derive attention levels from a single opaque severity or confidence score. Deterministic verification may reduce required human attention when it genuinely removes uncertainty, but it does not automatically eliminate attention for architecture, business-rule, security, data, or other judgment-heavy changes.
+
 ## 9. Human Review Brief Contract
 
 A normal brief SHOULD be reviewable in approximately 5–15 minutes.
