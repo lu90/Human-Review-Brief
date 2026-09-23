@@ -87,6 +87,13 @@ Justify attention using concrete dimensions such as correctness, architecture, s
 
 Do not rely on a single opaque score.
 
+Treat the taxonomy as human-attention routing, not generic severity:
+
+- A1–A4 answers: **How much human attention is required?**
+- Risk dimensions answer: **Why?**
+
+Do not mechanically map a numeric risk/confidence score to A1–A4. Strong deterministic verification may lower the attention required for some implementation details, but it must not erase judgment-heavy architecture, business-rule, security, data, or compatibility decisions.
+
 ## Step 6 — Produce the bounded brief
 
 Default human-attention budget:
