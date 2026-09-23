@@ -168,7 +168,7 @@ Feed the findings into attention triage. Preserve disagreement instead of forcin
 Only after specialist review is complete, classify the resulting findings and reviewed change context:
 
 - **A1 MUST REVIEW** — explicit human judgment required.
-- **A2 SHOULD REVIEW** — material change worth human inspection.
+- **A2 SHOULD REVIEW** — change worth human inspection.
 - **A3 SKIM** — short context is enough.
 - **A4 SAFE TO SKIP** — deterministic or low-value noise.
 
