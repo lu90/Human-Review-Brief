@@ -4,8 +4,10 @@ These fixtures are canonical examples for validating Human Review Brief behavior
 
 They serve two purposes:
 
-1. **Conformance / regression tests** — verify that future implementations still obey the HRB contracts.
+1. **Behavioral regression contract** — define invariants current and future implementations must preserve.
 2. **Few-shot examples** — provide compact examples of expected review and attention-routing behavior when useful.
+
+The current deterministic CI validates fixture structure, legal enum values, required canonical cases, Review Round Record shape, and the existence of the repository review policy. It does not yet prove live LLM semantic behavior.
 
 ## Golden expectations
 
@@ -29,5 +31,10 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C04_LOCAL_REFACTOR_VERIFIED` — local refactor with deterministic verification.
 - `C05_LARGE_MIGRATION_MANY_A1` — oversized migration review with many A1 findings.
 - `C06_REPOSITORY_PROMPT_INJECTION` — repository content attempts to control reviewer behavior.
+- `C07_REVIEW_COVERAGE_MANIFEST` — all specialist dimensions must be explicitly accounted for.
+- `C08_POLICY_CHANGE_SAME_PR` — proposed policy cannot authorize itself.
+- `C09_REDACTED_EVIDENCE` — sensitive payload is removed while provenance survives.
+- `C10_REMEDIATION_ROUND` — fresh full review remains isolated from remediation verification.
+- `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
 
-The cases are defined in `cases.yaml`.
+The cases are defined in `cases.yaml`. A Review Round Record example is provided separately.
