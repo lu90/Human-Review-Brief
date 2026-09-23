@@ -65,7 +65,7 @@ HRB-0 does not require a persisted repository baseline or invalidation engine. R
 
 Collect primary evidence from the change set and bounded repository context.
 
-For each review claim that affects human attention, construct an evidence chain using one or more roles as needed:
+For every Raw Finding, construct an evidence chain sufficient to support its claim using one or more roles as needed:
 
 - `spec_anchor`;
 - `base_anchor`;
@@ -157,6 +157,8 @@ A dimension may return:
 - one or more evidence-backed findings;
 - no finding.
 
+Record an explicit result for every required dimension. An omitted dimension is not the same as `no finding`.
+
 Routine, generated, formatting-only, rename-only, or otherwise low-attention changes are still reviewed and can later be classified as A3/A4.
 
 The contract requires dimension coverage, not one agent per dimension. One isolated reviewer may cover several dimensions, or multiple specialist reviewers may run independently.
@@ -165,17 +167,32 @@ Keep reviewer contexts independent where practical so one reviewer's assumptions
 
 ### 4.4 Reviewer output contract
 
-Each review finding should contain:
+Each Raw Finding MUST contain:
 
 1. claim;
 2. why it matters;
-3. primary evidence anchor;
+3. evidence chain sufficient to support the claim;
 4. affected risk dimensions;
 5. unresolved question, counterexample, or alternative interpretation.
 
+The Reviewer MUST also return a **Review Coverage Manifest** covering all required dimensions, for example:
+
+```text
+Spec / Scope                  reviewed — 2 findings
+Architecture / Correctness    reviewed — 1 finding
+Tests / Verification          reviewed — no finding
+Security / Privacy            reviewed — no finding
+Data / Migrations             reviewed — no finding
+Operations / Observability    reviewed — 1 finding
+Performance / Compatibility   reviewed — no finding
+Adversarial Challenge         reviewed — 1 finding
+
+Reviewer isolation: achieved
+```
+
 Reviewers produce findings, not merge decisions.
 
-Return the findings to the Orchestrator as **Raw Findings**. Do not perform final A1–A4 classification in the Reviewer context.
+Return the Raw Findings and Review Coverage Manifest to the Orchestrator. Do not perform final A1–A4 classification in the Reviewer context.
 
 ## Step 5 — Launch Brief Compiler
 
@@ -185,6 +202,7 @@ Give the Brief Compiler:
 
 - fixed repository / PR / base / head scope;
 - Raw Findings;
+- Review Coverage Manifest and Reviewer isolation status;
 - evidence chains and primary anchors;
 - deterministic CI / test evidence;
 - relevant spec or ticket references.
@@ -249,6 +267,9 @@ Use this format:
 # Human Review Brief
 
 ## Review scope
+
+## Review execution
+Reviewer isolation, Brief Compiler isolation, and Review Coverage Manifest.
 
 ## What changed
 
