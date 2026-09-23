@@ -42,7 +42,7 @@ Resolve and record:
 - originating spec / issue / ticket when available;
 - relevant CI / test evidence;
 - review round number;
-- previous review head and prior Review Round Record reference for round 2+; use not-applicable values for round 1.
+- previous review head and prior Review Round Record reference for round 2+; for round 1 use `previous_review_head: null` and `remediation_verification: null`.
 
 Fail early if the fixed point is invalid or the change set cannot be identified.
 
@@ -123,11 +123,16 @@ Give the reviewer a bounded review package:
 - active base-SHA `.hrb/REVIEW_POLICY.md` when present;
 - relevant standards and architecture contracts as evidence/context.
 
-For the fresh full review, do not provide prior-round findings or remediation conclusions as authoritative context.
+For the fresh full review, do not provide or expose prior-round findings or remediation conclusions at all. They MUST NOT be visible in the fresh Reviewer context.
 
 Prefer a separate sub-agent or fresh context that does not inherit the implementation conversation.
 
 If true isolation is unavailable, explicitly report **independent review unavailable**. Do not relabel self-review as independent review.
+
+The Orchestrator records isolation metadata from how it actually launched the role; the worker does not self-certify isolation. Record:
+
+- `status: achieved` with `method: fresh_context | isolated_subagent | runtime_enforced`; or
+- `status: unavailable` with `method: shared_context | unknown`.
 
 ### 4.2 Review to disconfirm
 
@@ -281,13 +286,13 @@ Every Raw Finding MUST be represented in the compiled brief. The compiler may me
 
 If the finding set is too large for one practical brief, partition it by topic, module, subsystem, risk cluster, or change cluster. Produce an index with total counts and partition membership. Do not solve scale by hiding A3/A4 findings or silently dropping lower-priority material.
 
-For every A1/A2 item provide:
+For every compiled finding provide:
 
 1. what changed / what is uncertain;
-2. why a human should care;
-3. consequence if wrong;
-4. direct evidence anchor;
-5. the question the human needs to answer.
+2. why it matters;
+3. a direct evidence anchor.
+
+Add the consequence if wrong when it materially helps judgment. Add an explicit human question only when the finding actually requires a human decision. Do not derive these presentation requirements mechanically from the A1–A4 label.
 
 Use this format:
 
@@ -334,9 +339,9 @@ Do not regenerate the entire brief.
 
 ## Review Round Record
 
-After each completed review round, the Orchestrator MUST emit a Review Round Record using the contract illustrated by `fixtures/hrb-0/review-round-record.example.yaml`.
+After each completed review round, the Orchestrator MUST emit a Review Round Record using the canonical contracts in `fixtures/hrb-0/review-round-record-round1.example.yaml` and `fixtures/hrb-0/review-round-record.example.yaml`.
 
-Round 1 records prior-round/remediation fields as not applicable. Round 2+ MUST record the previous review head and prior Review Round Record reference.
+Round 1 MUST encode `previous_review_head: null` and `remediation_verification: null`. Round 2+ MUST record the previous review head and prior Review Round Record reference.
 
 The record is factual metadata for later orchestration. Do not treat prior findings in the record as authority during a fresh independent review.
 
