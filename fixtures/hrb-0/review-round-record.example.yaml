@@ -1,0 +1,36 @@
+schema_version: 1
+artifact: hrb-review-round-record
+repository: lu90/example
+pr: 123
+round: 2
+base_sha: "1111111111111111111111111111111111111111"
+current_review_head: "3333333333333333333333333333333333333333"
+previous_review_head: "2222222222222222222222222222222222222222"
+
+fresh_review:
+  scope: base_to_current_head
+  prior_findings_visible_to_reviewer: false
+  reviewer_isolation: achieved
+  raw_findings_ref: "artifact://review-round-2/raw-findings"
+  coverage_manifest:
+    spec_scope: reviewed_with_findings
+    architecture_correctness: reviewed_with_findings
+    tests_verification: reviewed_no_finding
+    security_privacy: reviewed_no_finding
+    data_migrations: reviewed_no_finding
+    operations_observability: reviewed_no_finding
+    performance_compatibility: reviewed_no_finding
+    adversarial_challenge: reviewed_with_findings
+
+remediation_verification:
+  performed: true
+  scope: previous_review_head_to_current_head
+  prior_round_ref: "artifact://review-round-1"
+  results:
+    - prior_finding_id: RF-01
+      status: resolved
+      evidence_ref: "artifact://review-round-2/remediation/RF-01"
+
+brief:
+  compiler_isolation: achieved
+  brief_ref: "artifact://review-round-2/human-review-brief"
