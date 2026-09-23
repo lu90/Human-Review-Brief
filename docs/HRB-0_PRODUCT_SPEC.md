@@ -222,7 +222,7 @@ The A1–A4 taxonomy answers **how much human attention is required**. Risk dime
 
 A normal brief SHOULD be reviewable in approximately 5–15 minutes.
 
-Default budgets:
+Default presentation budgets:
 
 - material changes: max 5;
 - human decisions: max 3;
@@ -230,6 +230,18 @@ Default budgets:
 - A2 findings: max 5 before grouping;
 - recommended deep reads: max 8;
 - each deep read MUST explain why the human should open it.
+
+These are presentation budgets, not evidence-loss limits.
+
+**Budget the presentation, not the evidence.**
+
+When a category exceeds its default budget, HRB SHOULD:
+
+- show all A1 items without compression or omission;
+- show the highest-attention A2 items individually;
+- group additional A2/A3 material under an explicit overflow section with counts and drill-down links;
+- preserve all collected evidence for deep review;
+- state clearly that additional findings exist rather than silently dropping them.
 
 Required structure:
 
