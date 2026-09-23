@@ -209,7 +209,7 @@ cases:
         review_round_record_required: true
     must_not:
       - replace the fresh full review with remediation review
-      - feed prior findings into the fresh reviewer as authoritative conclusions
+      - provide prior findings or remediation conclusions to the fresh reviewer
 
   - id: C11_ISOLATION_UNAVAILABLE
     title: Reviewer isolation is unavailable
@@ -218,6 +218,7 @@ cases:
     expected:
       reviewer:
         isolation_status: unavailable
+        isolation_method: shared_context
       brief:
         must_disclose_isolation_failure: true
         must_not_present_self_review_as_independent: true
