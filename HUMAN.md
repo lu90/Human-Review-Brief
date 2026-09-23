@@ -20,6 +20,8 @@ If not, redirect:
 
 ## Gate 2 — Human decisions (~2–5 minutes)
 
+First confirm the brief states whether an **independent agent review** was completed and which review axes were covered.
+
 Read **Decisions requiring human judgment** and **MUST REVIEW**.
 
 For each item ask:
@@ -27,6 +29,7 @@ For each item ask:
 - Is this genuinely a decision I need to own?
 - What happens if this assumption is wrong?
 - Is the evidence link sufficient to verify the claim?
+- Did the independent reviewer actually challenge the implementation, or only restate it?
 
 If a decision is vague, redirect:
 
