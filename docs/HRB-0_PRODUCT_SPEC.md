@@ -95,7 +95,7 @@ For review round 2 or later, the orchestration scope MUST also record:
 - previous review head SHA;
 - prior Review Round Record reference.
 
-Round 1 records those prior-round fields as not applicable. These round fields do not replace the fixed base→current-head scope of the fresh independent review.
+Round 1 uses one canonical not-applicable encoding: `previous_review_head: null` and `remediation_verification: null`. These round fields do not replace the fixed base→current-head scope of the fresh independent review.
 
 HRB begins with the base→head diff and expands context only when necessary to interpret the change.
 
@@ -435,9 +435,16 @@ The reviewer SHOULD receive a bounded review package containing:
 - the active base-SHA `.hrb/REVIEW_POLICY.md` when present;
 - repository standards and relevant architectural contracts as evidence/context.
 
-The fresh independent Reviewer MUST NOT receive prior-round findings or remediation conclusions as authoritative context. This reduces anchoring on the implementation agent's rationale and on previous reviewers.
+The fresh independent Reviewer MUST NOT receive or be shown prior-round findings or remediation conclusions. They are excluded from the fresh-review context entirely so they cannot anchor the Reviewer.
 
 If the runtime cannot create a separate sub-agent, HRB SHOULD use a fresh isolated context. If true isolation is unavailable, HRB MUST state that independent review was not achieved and MUST NOT present self-review as equivalent.
+
+Isolation is factual orchestration metadata recorded by the Orchestrator, not a self-attestation by the worker. Each Reviewer and Brief Compiler isolation record MUST include:
+
+- `status`: `achieved` or `unavailable`;
+- `method`: how the runtime actually separated (or failed to separate) the context.
+
+For HRB-0, `achieved` methods are `fresh_context`, `isolated_subagent`, or `runtime_enforced`. `unavailable` methods are `shared_context` or `unknown`.
 
 ### 12.2 Reviewer objective
 
@@ -487,7 +494,7 @@ Each Raw Finding MUST include:
 - affected risk dimensions;
 - unresolved question or counterexample.
 
-The Raw Findings package MUST also include a Review Coverage Manifest for all required specialist dimensions and the Reviewer isolation status.
+The Raw Findings package MUST also include a Review Coverage Manifest for all required specialist dimensions. The Orchestrator MUST attach the Reviewer isolation status and method as execution metadata.
 
 The Reviewer MUST NOT suppress a finding merely because it expects the Brief Compiler to classify it at a lower attention level.
 
@@ -495,7 +502,7 @@ If an axis finds only routine or deterministic changes, it may emit low-signific
 
 Raw Findings and the Review Coverage Manifest are handed to the **Brief Compiler**. The compiler assigns A1–A4 attention ordering, preserves every finding in the compiled review surface, and preserves disagreement and uncertainty instead of manufacturing consensus.
 
-The final Human Review Brief MUST expose the Review Coverage Manifest together with Reviewer and Brief Compiler isolation status so the human can verify that the required review execution actually occurred.
+The final Human Review Brief MUST expose the Review Coverage Manifest together with Reviewer and Brief Compiler isolation status and method so the human can verify how the review execution was separated.
 
 ## 13. Human Gates
 
@@ -628,16 +635,19 @@ After each completed round, the Orchestrator MUST produce a **Review Round Recor
 - previous review head SHA when applicable;
 - fresh-review artifact reference;
 - Review Coverage Manifest;
-- Reviewer isolation status;
+- Reviewer isolation status and method;
 - remediation results/reference when applicable;
-- Brief Compiler isolation status;
+- Brief Compiler isolation status and method;
 - final brief reference.
 
 A Review Round Record is factual orchestration metadata, not an authority that can override primary evidence.
 
-Storage is runtime-specific. It MAY be a CI artifact, orchestrator workspace artifact, or another immutable/retrievable record. Round 1 records previous-review and remediation fields as not applicable; round 2+ MUST reference the previous review head and prior Review Round Record. It SHOULD NOT be committed into the PR under review during the same review round, because doing so would mutate the head being reviewed.
+Storage is runtime-specific. It MAY be a CI artifact, orchestrator workspace artifact, or another immutable/retrievable record. Round 1 MUST encode `previous_review_head: null` and `remediation_verification: null`; round 2+ MUST reference the previous review head and prior Review Round Record. It SHOULD NOT be committed into the PR under review during the same review round, because doing so would mutate the head being reviewed.
 
-A canonical example lives at `fixtures/hrb-0/review-round-record.example.yaml`.
+Canonical examples live at:
+
+- `fixtures/hrb-0/review-round-record-round1.example.yaml`;
+- `fixtures/hrb-0/review-round-record.example.yaml` for round 2+.
 
 ## 19. Conformance Fixtures
 
