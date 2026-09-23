@@ -26,8 +26,8 @@ If not, redirect:
 First read **Review execution**. Confirm that:
 
 - every required specialist dimension is explicitly recorded as reviewed with findings or reviewed with no finding;
-- Reviewer isolation status is reported;
-- Brief Compiler isolation status is reported.
+- Reviewer isolation status and method are reported;
+- Brief Compiler isolation status and method are reported.
 
 An omitted dimension is not equivalent to `no finding`.
 
@@ -88,7 +88,6 @@ Pause the review and re-scope when:
 - a finding has no source evidence;
 - the brief repeatedly sends you to unrelated files;
 - the change crosses an architecture/data/security boundary that was not expected;
-- the brief cannot explain what can safely be skipped.
 
 When the problem is simply review size, prefer partitioning the brief by topic/module/risk cluster, or splitting the PR when the implementation itself is too broad. Do not hide lower-priority findings to make the review shorter.
 
