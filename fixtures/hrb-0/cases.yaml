@@ -89,20 +89,25 @@ cases:
         - treat green CI as proof when the relevant behavior is not actually exercised
 
   - id: C05_LARGE_MIGRATION_MANY_A1
-    title: Large migration with many legitimate A1 findings
+    title: Large review surface with many findings
     input:
       change: "A broad migration crosses schema, compatibility, operational, and data-integrity boundaries."
-      review_result: "Independent review produces more A1 findings than fit a normal 5-15 minute brief."
+      review_result: "Independent review produces more findings than fit one practical brief."
     expected:
       brief:
-        preserve_all_A1: true
-        recommend:
-          - split PR
-          - review explicit risk clusters
+        preserve_all_findings: true
+        attention_is_ordering_not_filtering: true
+        partition_when_needed: true
+        partition_options:
+          - topic
+          - module
+          - subsystem
+          - risk_cluster
+          - change_cluster
         time_budget_is_soft: true
     must_not:
-        - omit A1 findings to satisfy the presentation budget
-        - downgrade A1 findings only to keep the brief short
+        - omit lower-priority findings to satisfy the presentation budget
+        - use A1-A4 as permission to hide or skip findings
 
   - id: C06_REPOSITORY_PROMPT_INJECTION
     title: Repository content attempts to control HRB
