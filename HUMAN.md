@@ -35,9 +35,7 @@ If this is round 2+, also confirm that the fresh full review ran before the sepa
 
 If `.hrb/REVIEW_POLICY.md` changed, inspect that policy diff directly. A proposed policy change is human-owned and cannot authorize itself within the same PR.
 
-Then read **Decisions requiring human judgment**, **MUST REVIEW**, and every **SHOULD REVIEW** summary.
-
-A2 / SHOULD REVIEW means the summary deserves human inspection, but it does not require opening every underlying source. Open A2 evidence selectively when the summary is unclear, surprising, disputed, or relevant to a decision.
+Then read **Decisions requiring human judgment** and **MUST REVIEW**.
 
 For each item ask:
 
@@ -52,7 +50,7 @@ If a decision is vague, redirect:
 
 ## Gate 3 — Targeted evidence (~2–8 minutes)
 
-Open only the recommended deep reads that correspond to unresolved decisions, A1 findings, or selected A2 items that remained unclear after reading their summaries.
+Open only the recommended deep reads that correspond to unresolved decisions or A1 findings.
 
 Ask:
 
