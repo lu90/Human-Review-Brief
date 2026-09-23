@@ -7,11 +7,13 @@ AI can generate code, specifications, tickets, tests, and review reports faster 
 ## Core idea
 
 ```text
-Repository / PR / Spec / Tickets / CI
+PR / base→head diff / Spec / Tests / CI
                 ↓
-      Repository Understanding
+      Repository Context Expansion
                 ↓
          Evidence Collection
+                ↓
+      Independent Agent Review
                 ↓
         Attention Triage
                 ↓
@@ -42,12 +44,13 @@ Repository / PR / Spec / Tickets / CI
 
 ## Proposed review model
 
-HRB will support two layers of repository understanding:
+HRB-0 is **PR-centered**.
 
-- **Bootstrap scan** — inspect the repository broadly and build a baseline understanding of architecture, domains, important artifacts, conventions, tests, and risk boundaries.
-- **Incremental review** — refresh only what changed, then relate those changes back to the baseline model.
+The default review moment is before a pull request is merged. The fixed review scope is the PR's base commit → head commit. The repository is available as context, but HRB expands outward from the diff only as needed: affected dependencies, relevant specifications, tests, standards, and CI evidence.
 
-The review pipeline will classify findings by both **risk** and **human-attention value**, then generate a compact Markdown brief with deep links such as:
+HRB-0 intentionally does **not** require a persisted repository-understanding cache or an invalidation engine. A later version may add one if repeated context reconstruction becomes a demonstrated bottleneck.
+
+The review pipeline classifies findings by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown brief with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168
@@ -67,9 +70,8 @@ Up to 5 material changes.
 ## 2. Decisions requiring human judgment
 Up to 3 explicit decisions.
 
-## 3. High-risk findings
-Only findings that can materially affect correctness, architecture,
-security, data, compatibility, or operations.
+## 3. MUST REVIEW / SHOULD REVIEW
+A1 findings requiring human judgment and the highest-value A2 findings.
 
 ## 4. Recommended deep reads
 A small set of exact files / line ranges / document sections, each with
@@ -91,6 +93,15 @@ Mechanical, generated, boilerplate, or otherwise low-attention changes.
 - [ ] Deep review selected item
 ```
 
+## Contract authority
+
+When documents disagree:
+
+1. `docs/HRB-0_PRODUCT_SPEC.md` defines the product contract.
+2. `SKILL.md` defines the agent execution contract and MUST conform to the Product Spec.
+3. `HUMAN.md` defines the human review protocol and MUST conform to the Product Spec.
+4. `README.md` is an overview only and is not normative.
+
 ## Status
 
-The repository is in the initial design stage. The first milestone is to define the repository-understanding model, attention taxonomy, evidence/link format, and the contract for a bounded Human Review Brief.
+The repository is in the initial design stage. The first milestone is to define PR-scoped context construction, attention taxonomy, evidence chains, trust boundaries, and the contract for a bounded Human Review Brief.
