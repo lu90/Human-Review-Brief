@@ -76,9 +76,9 @@ cases:
         - targeted tests cover the changed behavior
         - full test suite passes
         - typecheck passes
-      expected:
-        reviewer:
-          must_verify_scope_and_behavior_claim: true
+    expected:
+      reviewer:
+        must_verify_scope_and_behavior_claim: true
       brief:
         allowed_attention:
           - A3
