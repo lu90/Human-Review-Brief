@@ -19,7 +19,7 @@ HRB MUST:
 - build enough repository understanding to interpret a change in context;
 - classify information by human-attention value and engineering risk;
 - compress large engineering outputs into a bounded brief;
-- preserve traceability from every review claim that affects human attention to source evidence;
+- preserve traceability from every review finding to source evidence;
 - provide direct deep links to exact code lines, document sections, PRs, issues, tests, or CI evidence;
 - tell the human what to inspect, why it matters, and what decision is required;
 - allow deeper review without forcing the human to read everything.
@@ -346,6 +346,9 @@ Required structure:
 ## Review scope
 Fixed point, head, spec/ticket sources, verification sources.
 
+## Review execution
+Reviewer isolation status, Brief Compiler isolation status, and Review Coverage Manifest for all required specialist dimensions.
+
 ## What changed
 Up to 5 notable changes.
 
@@ -454,25 +457,31 @@ Every PR review MUST cover:
 
 All dimensions are evaluated for every PR. A dimension may return no finding. Low-attention findings are still preserved for triage rather than being used to skip review.
 
+The Reviewer MUST emit an explicit **Review Coverage Manifest** that records the result for every required dimension. Each dimension MUST be distinguishable as reviewed with one or more findings, or reviewed with no finding. Omitted dimensions are not equivalent to `no finding`.
+
 The product contract requires coverage of these dimensions, but does not require one separate agent per dimension. A runtime may use one reviewer, multiple parallel specialist reviewers, or another isolated arrangement, provided coverage and isolation are preserved.
 
 ### 12.4 Review output
 
 The Reviewer produces evidence-backed **Raw Findings**, not merge decisions and not the final attention classification.
 
-Each review finding SHOULD include:
+Each Raw Finding MUST include:
 
 - claim;
 - why it may matter;
-- evidence chain / primary evidence anchors;
+- evidence chain sufficient to support the claim;
 - affected risk dimensions;
 - unresolved question or counterexample.
+
+The Raw Findings package MUST also include a Review Coverage Manifest for all required specialist dimensions and the Reviewer isolation status.
 
 The Reviewer MUST NOT suppress a finding merely because it expects the Brief Compiler to classify it as A3 or A4.
 
 If an axis finds only routine or deterministic changes, it may emit low-significance raw findings or no finding. The review layer itself is never skipped based on an up-front importance guess.
 
-Raw Findings are handed to the **Brief Compiler**. The compiler performs A1–A4 attention routing and preserves disagreement and uncertainty instead of manufacturing consensus.
+Raw Findings and the Review Coverage Manifest are handed to the **Brief Compiler**. The compiler performs A1–A4 attention routing and preserves disagreement and uncertainty instead of manufacturing consensus.
+
+The final Human Review Brief MUST expose the Review Coverage Manifest together with Reviewer and Brief Compiler isolation status so the human can verify that the required review execution actually occurred.
 
 ## 13. Human Gates
 
@@ -532,7 +541,7 @@ HRB-0 defines three runtime roles:
 
 - pins the review scope;
 - launches the Reviewer;
-- receives Raw Findings;
+- receives Raw Findings and the Review Coverage Manifest;
 - launches the Brief Compiler with a bounded handoff;
 - returns the final brief to the human;
 - does not act as the independent Reviewer.
@@ -548,7 +557,7 @@ HRB-0 defines three runtime roles:
 
 ### Brief Compiler
 
-- receives fixed scope, Raw Findings, deterministic verification, and evidence references;
+- receives fixed scope, Raw Findings, Review Coverage Manifest, deterministic verification, and evidence references;
 - may inspect primary evidence when clarification is necessary;
 - performs A1–A4 attention triage;
 - produces the bounded Human Review Brief;
