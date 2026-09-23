@@ -22,6 +22,8 @@ Main Agent / Orchestrator
 
 The Reviewer and Brief Compiler are separate roles with separate contexts. The Reviewer optimizes for finding and evidencing problems; the Brief Compiler optimizes for routing human attention without dropping important findings.
 
+Repositories may define a short, human-owned `.hrb/REVIEW_POLICY.md` for project-specific review rules. During a PR review, the base-SHA version governs; a policy change in the PR cannot authorize itself.
+
 ### Principles
 
 1. **Understand before summarizing.**
@@ -50,6 +52,8 @@ The default review moment is before a pull request is merged. The fixed review s
 
 HRB-0 intentionally does **not** require a persisted repository-understanding cache or an invalidation engine. A later version may add one if repeated context reconstruction becomes a demonstrated bottleneck.
 
+For round 2+, HRB keeps the fresh independent `base → current head` review and adds a separate `previous review head → current head` remediation verification. A small Review Round Record preserves the factual handoff between rounds without feeding old conclusions into the fresh Reviewer.
+
 Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then classifies them by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown brief with evidence chains and deep links such as:
 
 ```text
@@ -64,30 +68,36 @@ CI run #456
 ```markdown
 # Human Review Brief
 
-## 1. What changed
+## 1. Review scope and execution
+Pinned scope, Reviewer/Compiler isolation, and specialist coverage.
+
+## 2. Remediation verification
+For round 2+, whether prior findings were actually addressed.
+
+## 3. What changed
 Up to 5 notable changes.
 
-## 2. Decisions requiring human judgment
+## 4. Decisions requiring human judgment
 Up to 3 explicit decisions.
 
-## 3. MUST REVIEW / SHOULD REVIEW
+## 5. MUST REVIEW / SHOULD REVIEW
 A1 findings requiring human judgment and the highest-value A2 findings.
 
-## 4. Recommended deep reads
+## 6. Recommended deep reads
 A small set of exact files / line ranges / document sections, each with
 a reason why human attention is warranted.
 
-## 5. Spec and scope drift
+## 7. Spec and scope drift
 Missing requirements, changed assumptions, scope creep, and undocumented
 decisions.
 
-## 6. Verification evidence
+## 8. Verification evidence
 Tests, type checks, lint, CI, migrations, runtime validation, and gaps.
 
-## 7. Safe to skim
+## 9. Safe to skim
 Mechanical, generated, boilerplate, or otherwise low-attention changes.
 
-## 8. Human decision
+## 10. Human decision
 - [ ] Approve
 - [ ] Request changes
 - [ ] Deep review selected item
