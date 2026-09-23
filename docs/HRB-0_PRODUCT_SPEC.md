@@ -48,6 +48,13 @@ Spec / Tickets / PR / Diff / Tests / CI / Docs
                          Evidence Collection
                                   │
                                   ▼
+                    Independent Agent Review
+                     ├─ Spec / scope alignment
+                     ├─ Architecture / correctness
+                     ├─ Tests / verification
+                     └─ Adversarial challenge
+                                  │
+                                  ▼
                          Attention Triage
                                   │
                                   ▼
@@ -315,22 +322,81 @@ Full source context
 
 The human should be able to move from 30 seconds of orientation to a targeted code/document deep dive without losing traceability.
 
-## 11. Review Isolation
+## 11. Independent Agent Review Gate
 
-Where practical, analysis roles SHOULD be isolated.
+Independent agent review is a first-class stage between evidence collection and attention triage.
 
-A reviewer should receive the fixed review scope and evidence rather than inherit the entire implementation conversation. This reduces anchoring on the implementation agent's rationale.
+For any material review, HRB MUST perform an independent review before generating the final Human Review Brief.
 
-Specialist analyses MAY run independently, for example:
+### 11.1 Isolation contract
 
-- spec alignment;
-- repository standards;
-- architecture;
+The reviewer MUST NOT simply continue the implementation agent's full conversation.
+
+The reviewer SHOULD receive a bounded review package containing:
+
+- fixed point / base and review head;
+- relevant repository-understanding baseline;
+- originating spec / issue / tickets;
+- the actual diff or changed artifacts;
+- deterministic verification evidence;
+- repository standards and relevant architectural contracts.
+
+This reduces anchoring on the implementation agent's rationale.
+
+If the runtime cannot create a separate sub-agent, HRB SHOULD use a fresh isolated context. If true isolation is unavailable, HRB MUST state that independent review was not achieved and MUST NOT present self-review as equivalent.
+
+### 11.2 Reviewer objective
+
+The reviewer's job is not to validate the author's story.
+
+The reviewer MUST actively try to disconfirm it by looking for:
+
+- missing or partially implemented requirements;
+- incorrect assumptions;
+- scope creep;
+- architecture boundary violations;
+- correctness defects and edge cases;
+- over-engineering or speculative abstractions;
+- weak or misleading tests;
+- verification gaps;
+- security, data, compatibility, or operational risks;
+- plausible alternative designs that expose hidden trade-offs.
+
+### 11.3 Required review axes
+
+A material review MUST cover at least:
+
+- spec / scope alignment;
+- architecture / correctness;
 - tests / verification;
-- security;
-- data / migrations.
+- adversarial challenge.
 
-HRB aggregates these analyses for **attention triage**, not to manufacture consensus.
+Additional specialist axes MAY be added when relevant:
+
+- repository standards;
+- security / privacy;
+- data / migrations;
+- operations / observability;
+- performance;
+- compatibility.
+
+Skipped axes MUST be recorded with a reason.
+
+### 11.4 Review output
+
+Independent reviewers produce evidence-backed findings, not merge decisions.
+
+Each material finding SHOULD include:
+
+- claim;
+- why it may matter;
+- primary evidence anchor;
+- affected risk dimensions;
+- unresolved question or counterexample.
+
+The independent review feeds **Attention Triage**. It does not approve, reject, or merge the change.
+
+HRB aggregates independent analyses to expose disagreement and uncertainty, not to manufacture consensus.
 
 ## 12. Human Gates
 
@@ -358,7 +424,9 @@ HRB MUST guard against:
 - generated noise receiving equal attention to architecture decisions;
 - unstable line links;
 - false certainty when evidence is incomplete;
-- a reviewer rubber-stamping another agent's narrative.
+- a reviewer rubber-stamping another agent's narrative;
+- the implementation agent being treated as its own independent reviewer;
+- adversarial review being skipped without disclosure.
 
 ## 14. Initial Modes
 
@@ -394,6 +462,8 @@ HRB-0 is complete when the project has agreed contracts for:
 - Human Review Brief format;
 - bootstrap / review / deep-review modes;
 - human gates and stop rules;
+- independent agent review and isolation contract;
+- adversarial review requirements;
 - deterministic handling of fixed points and source links.
 
 Runtime implementation is intentionally deferred until these contracts are reviewed.
