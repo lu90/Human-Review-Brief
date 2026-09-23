@@ -13,7 +13,9 @@ Ask:
 - Is this the right base / fixed point?
 - Is this the right branch, PR, or commit range?
 - Is the correct spec / ticket being used?
-- Is the brief centered on the actual base→head PR diff rather than an outdated repository summary?
+- Is the brief centered on the actual base→current-head PR diff rather than an outdated repository summary?
+- If this is round 2+, are the previous review head and round number recorded?
+- If `.hrb/REVIEW_POLICY.md` changed in this PR, is the base-SHA policy still being used for the current review?
 
 If not, redirect:
 
@@ -28,6 +30,10 @@ First read **Review execution**. Confirm that:
 - Brief Compiler isolation status is reported.
 
 An omitted dimension is not equivalent to `no finding`.
+
+If this is round 2+, also confirm that the fresh full review ran before the separate remediation verification.
+
+If `.hrb/REVIEW_POLICY.md` changed, inspect that policy diff directly. A proposed policy change is human-owned and cannot authorize itself within the same PR.
 
 Then read **Decisions requiring human judgment** and **MUST REVIEW**.
 
