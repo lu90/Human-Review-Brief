@@ -55,7 +55,11 @@ On later runs, use **Baseline + Invalidation**: detect which repository-understa
 
 Collect evidence from the change set and surrounding context.
 
-Important claims require stable anchors. Prefer commit-pinned GitHub links with line ranges.
+Important claims require stable anchors. For material findings, use stable source anchors whenever technically available. Prefer commit-pinned GitHub links with line ranges for repository code and other repository artifacts.
+
+Anchor primary evidence, not another AI summary. A review report may be supporting context, but the evidence chain should terminate at source code, specs, tests, CI, migrations, issues, PRs, or other primary engineering artifacts.
+
+If only local/uncommitted evidence exists, fall back to `path:line-range` and explicitly mark it as unstable/local.
 
 Do not treat an implementation agent's explanation as evidence by itself.
 
