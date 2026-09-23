@@ -309,7 +309,7 @@ The A1–A4 taxonomy answers **how much human attention is required**. Risk dime
 
 ## 10. Human Review Brief Contract
 
-A normal brief SHOULD be reviewable in approximately 5–15 minutes.
+A normal-sized PR SHOULD produce a brief that is reviewable in approximately 5–15 minutes. This is a usability target, not a limit that may hide required findings.
 
 Default presentation budgets:
 
@@ -331,6 +331,8 @@ When a category exceeds its default budget, HRB SHOULD:
 - group additional A2/A3 material under an explicit overflow section with counts and drill-down links;
 - preserve all collected evidence for deep review;
 - state clearly that additional findings exist rather than silently dropping them.
+
+If A1 volume makes the review meaningfully exceed the normal attention target, HRB MUST preserve every A1 finding and SHOULD recommend splitting the PR or reviewing explicitly separated risk clusters. Human-attention limits MUST NOT be used to suppress required review.
 
 Required structure:
 
