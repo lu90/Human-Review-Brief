@@ -256,6 +256,8 @@ dims = require_path(c07, "C07", %w[expected reviewer required_dimensions])
 fail_contract("C07: required_dimensions must exactly match HRB specialist dimensions") unless dims == DIMENSIONS
 require_path(c07, "C07", %w[expected brief must_expose_review_coverage_manifest], true)
 require_path(c07, "C07", %w[expected brief must_expose_isolation_status], true)
+require_path(c07, "C07", %w[expected brief must_expose_isolation_method], true)
+require_includes(c07["must_not"], "hide reviewer or compiler isolation status or method", "C07.must_not")
 
 c08 = by_id.fetch("C08_POLICY_CHANGE_SAME_PR")
 require_path(c08, "C08", %w[expected reviewer active_policy_source], "base_sha")
