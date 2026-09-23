@@ -64,7 +64,7 @@ Spec / Tickets / PR / Diff / Tests / CI / Docs
                                       Source Evidence
 ```
 
-Subsequent runs SHOULD refresh the baseline incrementally rather than rescan the entire repository blindly.
+Subsequent runs SHOULD use **Baseline + Invalidation**: reuse the repository-understanding baseline by default, explicitly detect which parts have become stale, and refresh only invalidated areas. Structural changes MAY trigger a partial or full rebuild.
 
 ## 5. Repository Understanding
 
@@ -94,7 +94,18 @@ The first review performs a broad repository scan and creates a baseline map.
 
 ### 5.2 Incremental mode
 
-Later reviews determine what changed and update only affected parts of the baseline.
+Later reviews determine what changed, identify which parts of the baseline are invalidated, and update only affected context.
+
+Typical invalidation triggers include:
+
+- module or directory restructuring;
+- dependency or runtime changes;
+- schema or migration changes;
+- public API or contract changes;
+- changes to architecture or authoritative design documents;
+- changes that cross domain, persistence, security, or external-system boundaries.
+
+Minor documentation, formatting, or local implementation changes SHOULD NOT force unrelated baseline sections to refresh.
 
 A change SHOULD be interpreted against:
 
