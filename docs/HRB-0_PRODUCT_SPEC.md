@@ -546,7 +546,27 @@ The Reviewer and Brief Compiler SHOULD use separate contexts. They MAY use the s
 
 For HRB-0, one Reviewer may cover all specialist dimensions. The contract does not require eight separate specialist agents.
 
-## 18. HRB-0 Exit Criteria
+## 18. Conformance Fixtures
+
+HRB-0 maintains canonical conformance cases under `fixtures/hrb-0/`.
+
+These cases serve as both:
+
+- regression fixtures for validating future implementations;
+- optional few-shot examples for teaching expected HRB behavior.
+
+Golden expectations are expressed as **behavioral invariants**, not exact natural-language output. Conformance SHOULD validate required findings, evidence roles, attention routing, human-decision behavior, and forbidden behaviors without requiring deterministic prose.
+
+The initial suite covers:
+
+- formatting-only changes;
+- public API breaking changes;
+- deleted authorization guards;
+- verified local refactors;
+- oversized migrations with many A1 findings;
+- repository prompt-injection attempts.
+
+## 19. HRB-0 Exit Criteria
 
 HRB-0 is complete when the project has agreed contracts for:
 
@@ -562,6 +582,7 @@ HRB-0 is complete when the project has agreed contracts for:
 - independent specialist review and isolation contract;
 - fixed specialist-dimension coverage;
 - adversarial review requirements;
-- deterministic handling of fixed points and source links.
+- deterministic handling of fixed points and source links;
+- canonical conformance fixtures with behavioral golden expectations.
 
 Runtime implementation is intentionally deferred until these contracts are reviewed.
