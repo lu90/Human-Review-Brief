@@ -10,7 +10,9 @@ previous_review_head: "2222222222222222222222222222222222222222"
 fresh_review:
   scope: base_to_current_head
   prior_findings_visible_to_reviewer: false
-  reviewer_isolation: achieved
+  reviewer_isolation:
+    status: achieved
+    method: fresh_context
   raw_findings_ref: "artifact://review-round-2/raw-findings"
   coverage_manifest:
     spec_scope: reviewed_with_findings
@@ -32,5 +34,7 @@ remediation_verification:
       evidence_ref: "artifact://review-round-2/remediation/RF-01"
 
 brief:
-  compiler_isolation: achieved
+  compiler_isolation:
+    status: achieved
+    method: fresh_context
   brief_ref: "artifact://review-round-2/human-review-brief"
