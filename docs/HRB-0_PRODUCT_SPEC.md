@@ -19,7 +19,7 @@ HRB MUST:
 - build enough repository understanding to interpret a change in context;
 - classify information by human-attention value and engineering risk;
 - compress large engineering outputs into a bounded brief;
-- preserve traceability from every material claim to source evidence;
+- preserve traceability from every review claim that affects human attention to source evidence;
 - provide direct deep links to exact code lines, document sections, PRs, issues, tests, or CI evidence;
 - tell the human what to inspect, why it matters, and what decision is required;
 - allow deeper review without forcing the human to read everything.
@@ -60,11 +60,15 @@ Spec / Tickets ───────────┘          │
                          Evidence Collection
                                   │
                                   ▼
-                    Independent Agent Review
-                     ├─ Spec / scope alignment
-                     ├─ Architecture / correctness
-                     ├─ Tests / verification
-                     └─ Adversarial challenge
+                 Independent Specialist Review
+                  ├─ Spec / scope
+                  ├─ Architecture / correctness
+                  ├─ Tests / verification
+                  ├─ Security / privacy
+                  ├─ Data / migrations
+                  ├─ Operations / observability
+                  ├─ Performance / compatibility
+                  └─ Adversarial challenge
                                   │
                                   ▼
                          Attention Triage
@@ -127,7 +131,7 @@ HRB-0 MUST NOT require a persisted repository-understanding cache or invalidatio
 
 ## 6. Evidence Model
 
-Every material finding MUST be traceable to an **evidence chain** sufficient to support the claim.
+Every review finding MUST be traceable to an **evidence chain** sufficient to support the claim.
 
 An evidence chain is:
 
@@ -194,7 +198,7 @@ https://github.com/<owner>/<repo>/blob/<commit>/<path>#L120-L168
 
 Branch-only links SHOULD be avoided for review evidence when a commit SHA is available because line numbers can drift.
 
-For material findings, stable source anchors are REQUIRED whenever technically available. Repository artifacts SHOULD default to commit-pinned permalinks. Evidence anchors MUST point to primary source evidence rather than merely to another AI-generated summary or review report.
+For review findings, stable source anchors are REQUIRED whenever technically available. Repository artifacts SHOULD default to commit-pinned permalinks. Evidence anchors MUST point to primary source evidence rather than merely to another AI-generated summary or review report.
 
 Preferred anchor forms:
 
@@ -241,14 +245,14 @@ Typical triggers:
 - security / privacy / authorization behavior;
 - data loss, schema, migration, or destructive behavior;
 - public API / compatibility changes;
-- material business-rule changes;
+- business-rule changes;
 - unverified assumptions affecting correctness;
 - spec deviation that changes intended behavior;
 - risk acceptance.
 
 ### A2 — SHOULD REVIEW
 
-Material engineering change where human understanding is valuable but no immediate hard gate is known.
+Engineering change where human understanding is valuable but no immediate hard gate is known.
 
 Typical triggers:
 
@@ -309,7 +313,7 @@ A normal brief SHOULD be reviewable in approximately 5–15 minutes.
 
 Default presentation budgets:
 
-- material changes: max 5;
+- notable changes: max 5;
 - human decisions: max 3;
 - A1 findings: show all;
 - A2 findings: max 5 before grouping;
@@ -337,7 +341,7 @@ Required structure:
 Fixed point, head, spec/ticket sources, verification sources.
 
 ## What changed
-Up to 5 material changes.
+Up to 5 notable changes.
 
 ## Decisions requiring human judgment
 Up to 3 questions with evidence and consequence.
@@ -387,11 +391,13 @@ Full source context
 
 The human should be able to move from 30 seconds of orientation to a targeted code/document deep dive without losing traceability.
 
-## 12. Independent Agent Review Gate
+## 12. Independent Specialist Review
 
-Independent agent review is a first-class stage between evidence collection and attention triage.
+Independent specialist review is the first layer between evidence collection and attention triage.
 
-For any material review, HRB MUST perform an independent review before generating the final Human Review Brief.
+There is no pre-review classification such as "material", "mechanical", or "low risk". Every PR enters the same review layer first. Importance is assigned only after review findings exist.
+
+Every PR review MUST pass through independent specialist review before attention triage and Human Review Brief generation.
 
 ### 12.1 Isolation contract
 
@@ -429,29 +435,33 @@ The reviewer MUST actively try to disconfirm it by looking for:
 
 ### 12.3 Required review axes
 
-A material review MUST cover at least:
+Every PR review MUST cover:
 
 - spec / scope alignment;
 - architecture / correctness;
 - tests / verification;
 - adversarial challenge.
 
-Additional specialist axes MAY be added when relevant:
+The required specialist dimensions are:
 
-- repository standards;
+- spec / scope alignment;
+- architecture / correctness;
+- tests / verification;
 - security / privacy;
 - data / migrations;
 - operations / observability;
-- performance;
-- compatibility.
+- performance / compatibility;
+- adversarial challenge.
 
-Skipped axes MUST be recorded with a reason.
+All dimensions are evaluated for every PR. A dimension may return no finding. Low-attention findings are still preserved for triage rather than being used to skip review.
+
+The product contract requires coverage of these dimensions, but does not require one separate agent per dimension. A runtime may use one reviewer, multiple parallel specialist reviewers, or another isolated arrangement, provided coverage and isolation are preserved.
 
 ### 12.4 Review output
 
 Independent reviewers produce evidence-backed findings, not merge decisions.
 
-Each material finding SHOULD include:
+Each review finding SHOULD include:
 
 - claim;
 - why it may matter;
@@ -459,7 +469,9 @@ Each material finding SHOULD include:
 - affected risk dimensions;
 - unresolved question or counterexample.
 
-The independent review feeds **Attention Triage**. It does not approve, reject, or merge the change.
+The independent specialist review feeds **Attention Triage**. It does not approve, reject, or merge the change.
+
+If an axis finds only routine or deterministic changes, those results may later be classified as A3 or A4. If an axis finds nothing, it may report no finding. The review layer itself is never skipped based on an up-front importance guess.
 
 HRB aggregates independent analyses to expose disagreement and uncertainty, not to manufacture consensus.
 
@@ -524,7 +536,8 @@ HRB-0 is complete when the project has agreed contracts for:
 - Human Review Brief format;
 - bootstrap / review / deep-review modes;
 - human gates and stop rules;
-- independent agent review and isolation contract;
+- independent specialist review and isolation contract;
+- fixed specialist-dimension coverage;
 - adversarial review requirements;
 - deterministic handling of fixed points and source links.
 
