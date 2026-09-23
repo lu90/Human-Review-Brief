@@ -2,7 +2,7 @@
 
 Human Review Brief (HRB) is a human-attention layer for AI-assisted software development.
 
-AI can generate code, specifications, tickets, tests, and review reports faster than a human can read them. HRB does not try to summarize everything. Its job is to decide what deserves human attention, preserve traceability to the source evidence, and produce a bounded review brief that a human can actually review.
+AI can generate code, specifications, tickets, tests, and review reports faster than a human can read them. HRB does not try to replace review with a filter. Its job is to organize all review findings by attention priority, preserve traceability to source evidence, and compile them into a review surface a human can actually work through.
 
 ## Core idea
 
@@ -13,8 +13,8 @@ Main Agent / Orchestrator
           │     PR + repo → Raw Findings
           │
           └── Brief Compiler
-                Raw Findings → A1–A4
-                → Human Review Brief
+                Raw Findings → A1–A4 ordering
+                → complete Human Review Brief
                          │
                          ▼
                     Human Decision
@@ -29,8 +29,8 @@ Repositories may define a short, human-owned `.hrb/REVIEW_POLICY.md` for project
 1. **Understand before summarizing.**
    Build enough repository context around the fixed PR scope before judging individual artifacts.
 
-2. **Triage, do not dump.**
-   The output is intentionally smaller than the available evidence.
+2. **Order and organize, do not silently filter.**
+   Every finding stays represented; the brief compresses evidence and partitions large review surfaces instead of hiding findings.
 
 3. **Evidence over confidence.**
    Every important claim should link back to source code, documentation, tests, issues, PRs, or CI evidence.
@@ -54,7 +54,7 @@ HRB-0 intentionally does **not** require a persisted repository-understanding ca
 
 For round 2+, HRB keeps the fresh independent `base → current head` review and adds a separate `previous review head → current head` remediation verification. A small Review Round Record preserves the factual handoff between rounds without feeding old conclusions into the fresh Reviewer.
 
-Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then classifies them by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown brief with evidence chains and deep links such as:
+Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168
@@ -80,8 +80,8 @@ Up to 5 notable changes.
 ## 4. Decisions requiring human judgment
 Up to 3 explicit decisions.
 
-## 5. MUST REVIEW / SHOULD REVIEW
-A1 findings requiring human judgment and the highest-value A2 findings.
+## 5. Findings by attention
+All findings ordered A1 Highest → A4 Low. Large finding sets are partitioned by topic/module/risk cluster instead of being omitted.
 
 ## 6. Recommended deep reads
 A small set of exact files / line ranges / document sections, each with
@@ -94,8 +94,8 @@ decisions.
 ## 8. Verification evidence
 Tests, type checks, lint, CI, migrations, runtime validation, and gaps.
 
-## 9. Safe to skim
-Mechanical, generated, boilerplate, or otherwise low-attention changes.
+## 9. Finding coverage
+Which Raw Findings are represented in this brief or partition, including deduplication mappings.
 
 ## 10. Human decision
 - [ ] Approve
