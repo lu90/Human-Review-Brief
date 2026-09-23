@@ -427,16 +427,9 @@ The reviewer MUST actively try to disconfirm it by looking for:
 - security, data, compatibility, or operational risks;
 - plausible alternative designs that expose hidden trade-offs.
 
-### 12.3 Required review axes
+### 12.3 Required specialist dimensions
 
 Every PR review MUST cover:
-
-- spec / scope alignment;
-- architecture / correctness;
-- tests / verification;
-- adversarial challenge.
-
-The required specialist dimensions are:
 
 - spec / scope alignment;
 - architecture / correctness;
@@ -562,7 +555,7 @@ HRB-0 is complete when the project has agreed contracts for:
 - trust boundary and sensitive-evidence handling;
 - attention taxonomy;
 - Human Review Brief format;
-- bootstrap / review / deep-review modes;
+- review / deep-review modes;
 - human gates and stop rules;
 - orchestrator / Reviewer / Brief Compiler role boundaries;
 - Reviewer / Brief Compiler context isolation;
