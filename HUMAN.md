@@ -21,9 +21,15 @@ If not, redirect:
 
 ## Gate 2 — Human decisions (~2–5 minutes)
 
-First confirm the brief states whether an **independent specialist review** was completed across the required dimensions and whether the final brief was compiled in a separate Brief Compiler context.
+First read **Review execution**. Confirm that:
 
-Read **Decisions requiring human judgment** and **MUST REVIEW**.
+- every required specialist dimension is explicitly recorded as reviewed with findings or reviewed with no finding;
+- Reviewer isolation status is reported;
+- Brief Compiler isolation status is reported.
+
+An omitted dimension is not equivalent to `no finding`.
+
+Then read **Decisions requiring human judgment** and **MUST REVIEW**.
 
 For each item ask:
 
