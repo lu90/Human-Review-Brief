@@ -96,13 +96,23 @@ Do not mechanically map a numeric risk/confidence score to A1–A4. Strong deter
 
 ## Step 6 — Produce the bounded brief
 
-Default human-attention budget:
+Default human-attention presentation budget:
 
 - max 5 material changes;
 - max 3 human decisions;
 - show every A1;
 - max 5 ungrouped A2 items;
 - max 8 recommended deep reads.
+
+**Budget the presentation, not the evidence.**
+
+If the review exceeds these limits:
+
+- never hide or group away A1 items;
+- present the highest-attention A2 items individually;
+- group remaining A2/A3 findings under an explicit overflow section with counts and evidence links;
+- preserve the full evidence set for targeted deep review;
+- never silently discard findings to satisfy the brief budget.
 
 For every A1/A2 item provide:
 
