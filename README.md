@@ -7,20 +7,20 @@ AI can generate code, specifications, tickets, tests, and review reports faster 
 ## Core idea
 
 ```text
-PR / base→head diff / Spec / Tests / CI
-                ↓
-      Repository Context Expansion
-                ↓
-         Evidence Collection
-                ↓
-      Independent Specialist Review
-                ↓
-        Attention Triage
-                ↓
-       Human Review Brief
-                ↓
-          Human Decision
+Main Agent / Orchestrator
+          │
+          ├── Reviewer
+          │     PR + repo → Raw Findings
+          │
+          └── Brief Compiler
+                Raw Findings → A1–A4
+                → Human Review Brief
+                         │
+                         ▼
+                    Human Decision
 ```
+
+The Reviewer and Brief Compiler are separate roles with separate contexts. The Reviewer optimizes for finding and evidencing problems; the Brief Compiler optimizes for routing human attention without dropping important findings.
 
 ### Principles
 
@@ -50,7 +50,7 @@ The default review moment is before a pull request is merged. The fixed review s
 
 HRB-0 intentionally does **not** require a persisted repository-understanding cache or an invalidation engine. A later version may add one if repeated context reconstruction becomes a demonstrated bottleneck.
 
-Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. Only after review does HRB classify findings by **human-attention value**, explain the relevant risk dimensions, and generate a compact Markdown brief with evidence chains and deep links such as:
+Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then classifies them by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown brief with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168
