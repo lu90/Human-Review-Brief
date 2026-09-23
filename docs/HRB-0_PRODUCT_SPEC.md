@@ -37,14 +37,15 @@ HRB is not intended to:
 ## 4. Core workflow
 
 ```text
-              FIRST RUN
-Repository ───────────────→ Repository Understanding Baseline
-                                  │
-                                  │
-                                  ▼
-Spec / Tickets / PR / Diff / Tests / CI / Docs
-                                  │
-                                  ▼
+PR base SHA ──────────────┐
+PR head SHA ──────────────┼──→ Fixed PR Scope
+Spec / Tickets ───────────┘          │
+                                    ▼
+                         Repository Context Expansion
+                      diff + dependency neighborhood
+                       + relevant specs/tests/standards
+                                    │
+                                    ▼
                          Evidence Collection
                                   │
                                   ▼
@@ -71,63 +72,97 @@ Spec / Tickets / PR / Diff / Tests / CI / Docs
                                       Source Evidence
 ```
 
-Subsequent runs SHOULD use **Baseline + Invalidation**: reuse the repository-understanding baseline by default, explicitly detect which parts have become stale, and refresh only invalidated areas. Structural changes MAY trigger a partial or full rebuild.
+HRB-0 uses **dynamic bounded context**, not a persisted repository baseline. The repository at the fixed base/head commits is the available context; the review expands outward from the PR diff only as needed.
 
-## 5. Repository Understanding
+## 5. PR Scope and Repository Context
 
-HRB needs an "understand anything" style repository model, but only to the depth required for review.
+The default HRB-0 review is a pre-merge pull-request review.
 
-The baseline SHOULD identify:
+The fixed scope MUST identify:
 
-- repository purpose;
-- major domains and modules;
-- architecture and dependency boundaries;
-- runtime entry points;
-- critical business paths;
-- public APIs and contracts;
+- repository;
+- base commit SHA;
+- head commit SHA;
+- PR or equivalent change-set identifier;
+- originating spec / issue / ticket when available;
+- relevant verification evidence.
+
+HRB begins with the base→head diff and expands context only when necessary to interpret the change.
+
+Context MAY include:
+
+- directly affected modules and dependencies;
+- callers/callees around changed boundaries;
+- architecture and domain contracts;
+- public APIs;
 - persistence and external-system boundaries;
-- repository standards and conventions;
-- test topology;
-- CI / build / deployment paths;
-- authoritative specifications and design documents;
-- generated / vendored / low-value areas;
-- known high-risk areas.
-
-The baseline is context, not the final review output.
-
-### 5.1 Bootstrap mode
-
-The first review performs a broad repository scan and creates a baseline map.
-
-### 5.2 Incremental mode
-
-Later reviews determine what changed, identify which parts of the baseline are invalidated, and update only affected context.
-
-Typical invalidation triggers include:
-
-- module or directory restructuring;
-- dependency or runtime changes;
-- schema or migration changes;
-- public API or contract changes;
-- changes to architecture or authoritative design documents;
-- changes that cross domain, persistence, security, or external-system boundaries.
-
-Minor documentation, formatting, or local implementation changes SHOULD NOT force unrelated baseline sections to refresh.
+- relevant tests;
+- repository standards;
+- CI / build / deployment evidence;
+- authoritative specifications and design documents.
 
 A change SHOULD be interpreted against:
 
 ```text
-changed artifact
-+ affected dependency/domain context
-+ originating spec/ticket
-+ verification evidence
-+ repository standards
-= review context
+base→head diff
++ dependency neighborhood
++ relevant spec/ticket
++ relevant tests and verification
++ repository standards/contracts
+= bounded review context
 ```
+
+HRB-0 MUST NOT require a persisted repository-understanding cache or invalidation engine. A future version MAY add persistent repository understanding if repeated context reconstruction is shown to be a real performance or cost bottleneck.
 
 ## 6. Evidence Model
 
-Every material finding MUST be traceable to evidence.
+Every material finding MUST be traceable to an **evidence chain** sufficient to support the claim.
+
+An evidence chain is:
+
+```text
+Claim
+  ↓
+Evidence[1..n]
+  ↓
+Relation explaining how the evidence supports the claim
+```
+
+A finding MAY need one anchor or several. HRB MUST NOT force a multi-step claim into a single precise-looking permalink when the claim depends on change over time, omission, or comparison.
+
+Supported evidence roles include:
+
+- `spec_anchor` — requirement or intended behavior;
+- `base_anchor` — relevant state before the change;
+- `diff_anchor` — the actual added/removed/modified hunk;
+- `head_anchor` — relevant state after the change;
+- `test_anchor` — exact test or test result;
+- `ci_anchor` — workflow run / job / step;
+- `absence_evidence` — a documented search or inspection scope showing expected behavior/evidence was not found.
+
+`absence_evidence` MUST record the inspected scope and MUST NOT claim exhaustive absence unless that scope is authoritative or demonstrably complete.
+
+Example:
+
+```text
+Claim: authorization guard was removed
+
+base_anchor  → guard exists before PR
+diff_anchor  → PR deletes the guard
+head_anchor  → affected path no longer performs the guard
+```
+
+Another example:
+
+```text
+Claim: required behavior is missing
+
+spec_anchor      → requirement explicitly exists
+head/diff anchors→ related implementation exists
+absence_evidence → expected behavior/test not found in the relevant bounded scope
+```
+
+Each evidence item SHOULD use a stable source anchor whenever technically available.
 
 An evidence anchor SHOULD be one of:
 
@@ -161,7 +196,7 @@ Preferred anchor forms:
 
 When only local or otherwise unstable evidence is available, HRB MAY fall back to a path-and-line reference such as `src/service.ts:120-168`, but it MUST label that anchor as unstable/local rather than presenting it as a permanent link.
 
-## 7. Attention Triage
+## 6.1 Stable source anchors
 
 HRB classifies by **human attention**, not merely severity.
 
@@ -218,7 +253,7 @@ Examples:
 - boilerplate;
 - changes fully enforced by deterministic tooling.
 
-## 8. Risk Dimensions
+## 9. Risk Dimensions
 
 Attention level SHOULD be justified using explicit dimensions rather than a mysterious aggregate score:
 
@@ -238,7 +273,7 @@ The explanation matters more than the label.
 
 The A1–A4 taxonomy answers **how much human attention is required**. Risk dimensions answer **why that attention is required**. HRB MUST NOT derive attention levels from a single opaque severity or confidence score. Deterministic verification may reduce required human attention when it genuinely removes uncertainty, but it does not automatically eliminate attention for architecture, business-rule, security, data, or other judgment-heavy changes.
 
-## 9. Human Review Brief Contract
+## 10. Human Review Brief Contract
 
 A normal brief SHOULD be reviewable in approximately 5–15 minutes.
 
@@ -302,7 +337,7 @@ Grouped A3/A4 material.
 - [ ] Deep review selected item
 ```
 
-## 10. Progressive Disclosure
+## 11. Progressive Disclosure
 
 The brief MUST NOT contain all collected evidence.
 
@@ -322,20 +357,20 @@ Full source context
 
 The human should be able to move from 30 seconds of orientation to a targeted code/document deep dive without losing traceability.
 
-## 11. Independent Agent Review Gate
+## 12. Independent Agent Review Gate
 
 Independent agent review is a first-class stage between evidence collection and attention triage.
 
 For any material review, HRB MUST perform an independent review before generating the final Human Review Brief.
 
-### 11.1 Isolation contract
+### 12.1 Isolation contract
 
 The reviewer MUST NOT simply continue the implementation agent's full conversation.
 
 The reviewer SHOULD receive a bounded review package containing:
 
 - fixed point / base and review head;
-- relevant repository-understanding baseline;
+- factual repository context expanded from the PR diff;
 - originating spec / issue / tickets;
 - the actual diff or changed artifacts;
 - deterministic verification evidence;
@@ -345,7 +380,7 @@ This reduces anchoring on the implementation agent's rationale.
 
 If the runtime cannot create a separate sub-agent, HRB SHOULD use a fresh isolated context. If true isolation is unavailable, HRB MUST state that independent review was not achieved and MUST NOT present self-review as equivalent.
 
-### 11.2 Reviewer objective
+### 12.2 Reviewer objective
 
 The reviewer's job is not to validate the author's story.
 
@@ -362,7 +397,7 @@ The reviewer MUST actively try to disconfirm it by looking for:
 - security, data, compatibility, or operational risks;
 - plausible alternative designs that expose hidden trade-offs.
 
-### 11.3 Required review axes
+### 12.3 Required review axes
 
 A material review MUST cover at least:
 
@@ -382,7 +417,7 @@ Additional specialist axes MAY be added when relevant:
 
 Skipped axes MUST be recorded with a reason.
 
-### 11.4 Review output
+### 12.4 Review output
 
 Independent reviewers produce evidence-backed findings, not merge decisions.
 
@@ -398,7 +433,7 @@ The independent review feeds **Attention Triage**. It does not approve, reject, 
 
 HRB aggregates independent analyses to expose disagreement and uncertainty, not to manufacture consensus.
 
-## 12. Human Gates
+## 13. Human Gates
 
 Human review should use explicit gates, not continuous reading.
 
@@ -411,12 +446,12 @@ A gate contains:
 - an actionable redirect if the answer is unsatisfactory;
 - a stop rule when scope or risk has escaped the expected boundary.
 
-## 13. Failure Modes to Prevent
+## 14. Failure Modes to Prevent
 
 HRB MUST guard against:
 
 - reviewing the wrong diff or fixed point;
-- stale repository understanding;
+- incorrect or insufficient repository context;
 - summaries without evidence;
 - important details buried by verbosity;
 - AI self-certification presented as verification;
@@ -428,21 +463,17 @@ HRB MUST guard against:
 - the implementation agent being treated as its own independent reviewer;
 - adversarial review being skipped without disclosure.
 
-## 14. Initial Modes
-
-### `bootstrap`
-
-Build or refresh repository understanding.
+## 15. Initial Modes
 
 ### `review`
 
-Produce the bounded Human Review Brief for a fixed change set.
+Produce the bounded Human Review Brief for a fixed PR/change set using base→head scope and dynamically expanded repository context.
 
 ### `deep-review <item>`
 
 Expand exactly one selected finding while preserving the original evidence chain.
 
-## 15. Inspirations
+## 16. Inspirations
 
 HRB borrows several useful ideas while targeting a different problem:
 
@@ -452,12 +483,13 @@ HRB borrows several useful ideas while targeting a different problem:
 
 HRB adds repository understanding, attention triage, progressive disclosure, and evidence-linked human review as first-class concepts.
 
-## 16. HRB-0 Exit Criteria
+## 17. HRB-0 Exit Criteria
 
 HRB-0 is complete when the project has agreed contracts for:
 
-- repository-understanding baseline;
-- evidence anchors;
+- PR-scoped bounded repository context;
+- evidence-chain model and stable anchors;
+- trust boundary and sensitive-evidence handling;
 - attention taxonomy;
 - Human Review Brief format;
 - bootstrap / review / deep-review modes;
