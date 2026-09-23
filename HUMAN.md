@@ -13,6 +13,7 @@ Ask:
 - Is this the right base / fixed point?
 - Is this the right branch, PR, or commit range?
 - Is the correct spec / ticket being used?
+- Is the brief centered on the actual base→head PR diff rather than an outdated repository summary?
 
 If not, redirect:
 
@@ -28,7 +29,7 @@ For each item ask:
 
 - Is this genuinely a decision I need to own?
 - What happens if this assumption is wrong?
-- Is the evidence link sufficient to verify the claim?
+- Is the evidence chain sufficient to verify the claim, including base/diff/head or absence evidence when needed?
 - Did the independent reviewer actually challenge the implementation, or only restate it?
 
 If a decision is vague, redirect:
@@ -57,6 +58,7 @@ Ask:
 
 - Which claims are proven by deterministic tooling?
 - Which claims are only asserted by an AI reviewer?
+- Has sensitive or private evidence been handled without leaking secrets or widening access?
 - Is the most important business behavior actually exercised?
 
 Do not equate "CI is green" with "the change is correct."
