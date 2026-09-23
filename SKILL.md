@@ -278,6 +278,12 @@ Bring in the exact surrounding source, relevant dependency context, competing ev
 
 Do not regenerate the entire brief.
 
+## Conformance examples
+
+Canonical examples live in `fixtures/hrb-0/cases.yaml`.
+
+They may be used as few-shot guidance when helpful, but they are primarily behavioral contract tests. Match the required invariants rather than copying their wording.
+
 ## Stop rules
 
 Stop and surface the issue instead of compressing it away when:
