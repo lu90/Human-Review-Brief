@@ -68,8 +68,12 @@ HRB Orchestrator
 
 The default runtime shape is **one orchestrator plus two isolated worker roles**:
 
-1. **Reviewer** — inspect the PR and repository, cover the required specialist dimensions, and produce evidence-backed raw findings.
-2. **Brief Compiler** — receive the fixed review scope, raw findings, and their primary evidence; classify human attention and produce the bounded Human Review Brief.
+1. **Reviewer** — one primary runtime role with two execution modes:
+   - **Fresh Review mode** — inspect the fixed base→current-head PR without prior findings and produce evidence-backed Raw Findings plus the Review Coverage Manifest.
+   - **Remediation Review mode** — for round 2+, inspect the previous-review-head→current-head remediation delta with prior findings available, while current-round Fresh Review findings remain excluded.
+2. **Brief Compiler** — receive the fixed review scope, raw findings, remediation results when applicable, and their primary evidence; classify human attention and produce the bounded Human Review Brief.
+
+
 
 The **Orchestrator** controls the workflow and context handoffs. It MUST NOT silently merge the Reviewer and Brief Compiler into one shared reasoning context.
 
@@ -540,7 +544,7 @@ If an axis finds only routine or deterministic changes, it may emit low-signific
 
 Raw Findings and the Review Coverage Manifest are handed to the **Brief Compiler**. The compiler assigns A1–A4 attention ordering, preserves every finding in the compiled review surface, and preserves disagreement and uncertainty instead of manufacturing consensus.
 
-The final Human Review Brief MUST expose the Review Coverage Manifest together with Reviewer and Brief Compiler isolation status and method so the human can verify how the review execution was separated.
+The final Human Review Brief MUST expose the Review Coverage Manifest together with Fresh Reviewer and Brief Compiler isolation status and method. For round 2+, it MUST also expose Remediation Review mode isolation status and method so the human can verify how each review execution context was separated.
 
 ## 13. Human Gates
 
@@ -615,20 +619,34 @@ HRB-0 defines three runtime roles:
 ### Orchestrator
 
 - pins the review scope;
-- launches the Reviewer;
+- launches the Reviewer in Fresh Review mode;
 - receives Raw Findings and the Review Coverage Manifest;
+- for round 2+, launches the same Reviewer runtime role in Remediation Review mode with a separate canonical handoff;
 - launches the Brief Compiler with a bounded handoff;
 - returns the final brief to the human;
 - does not act as the independent Reviewer.
 
 ### Reviewer
 
+The Reviewer is one primary runtime role with two modes.
+
+**Fresh Review mode:**
+
 - starts from the fixed PR scope;
 - reads the diff and expands repository context as needed;
 - covers every required specialist dimension;
 - constructs evidence chains;
 - outputs Raw Findings;
-- does not perform final A1–A4 attention routing.
+- MUST NOT receive prior findings or remediation conclusions.
+
+**Remediation Review mode:**
+
+- runs only after the Fresh Review for round 2+;
+- receives the prior Review Round Record, prior findings, and previous-review-head→current-head delta;
+- verifies each prior finding as resolved, partially resolved, unresolved, superseded, or cannot verify;
+- MUST NOT receive current-round Fresh Review findings.
+
+Neither Reviewer mode performs final A1–A4 attention routing.
 
 ### Brief Compiler
 
@@ -654,7 +672,8 @@ HRB-0 defines three canonical handoff templates:
 
 Each template has machine-readable front matter declaring:
 
-- role;
+- primary runtime `role`;
+- execution `mode`;
 - `input_mode: whitelist`;
 - allowed inputs;
 - forbidden inputs;
@@ -666,7 +685,7 @@ The Orchestrator MUST NOT append free-form implementation narrative, prior-round
 
 Fresh-review input isolation is deny-by-default. In particular, prior findings, prior remediation results, prior Human Review Briefs, prior human decisions, author rationale, and the implementation conversation MUST NOT enter the Fresh Reviewer handoff.
 
-Remediation review intentionally receives prior findings and the prior Review Round Record, but MUST NOT receive current-round Fresh Review findings.
+Remediation review is the Reviewer role operating in `remediation-review` mode. It intentionally receives prior findings and the prior Review Round Record, but MUST NOT receive current-round Fresh Review findings. It is not a fourth primary runtime role.
 
 The Brief Compiler intentionally receives current Raw Findings, coverage, isolation metadata, remediation results when applicable, and evidence references, but MUST NOT receive the implementation conversation or author rationale as trusted context.
 
@@ -696,6 +715,7 @@ The Orchestrator MUST run the fresh independent review before remediation verifi
 
 After each completed round, the Orchestrator MUST produce a **Review Round Record** containing at minimum:
 
+- a stable `record_ref` identifying this Review Round Record;
 - repository and PR identifier;
 - round number;
 - base SHA;
@@ -704,10 +724,17 @@ After each completed round, the Orchestrator MUST produce a **Review Round Recor
 - fresh-review artifact reference;
 - the complete set of Raw Finding IDs emitted in that round;
 - Review Coverage Manifest;
-- Reviewer isolation status and method;
-- remediation results/reference when applicable;
+- Fresh Review mode isolation status and method;
+- remediation results/reference and Remediation Review mode isolation status/method when applicable;
 - Brief Compiler isolation status and method;
 - final brief reference.
+
+The Review Coverage Manifest and Finding ID set MUST be minimally cross-field consistent:
+
+- if the Finding ID set is empty, every coverage dimension MUST be `reviewed_no_finding`;
+- if the Finding ID set is non-empty, at least one coverage dimension MUST be `reviewed_with_findings`.
+
+HRB-0 does not require a per-dimension Finding-ID mapping. This minimum invariant prevents contradictory structured metadata without introducing a coverage graph.
 
 A Review Round Record is factual orchestration metadata, not an authority that can override primary evidence.
 
@@ -718,11 +745,21 @@ For round 2+, the Orchestrator MUST deterministically validate the transition ag
 - current `round` equals prior `round + 1`;
 - repository, PR identifier, and base SHA match the prior record;
 - current `previous_review_head` equals prior `current_review_head`;
+- current `remediation_verification.prior_round_ref` equals the prior Review Round Record's `record_ref`;
 - the remediation result IDs are exactly the prior record's Raw Finding ID set;
 - each prior Finding ID appears exactly once in remediation results;
 - no current-round Fresh Finding ID is treated as a remediation target.
 
-These are orchestration invariants, not LLM judgments. A runtime MAY enforce them directly, and deterministic contract tooling SHOULD exercise the same transition rules with paired fixtures.
+These are structured-data referential and cross-field invariants, not natural-language semantic judgments. They MUST be checked deterministically.
+
+Deterministic contract tooling MUST exercise at least:
+
+- a valid non-empty prior-finding remediation transition;
+- a valid zero-prior-finding transition;
+- rejection of a missing remediation result;
+- rejection of a duplicate remediation result.
+
+This requirement does not introduce a general natural-language semantic validator.
 
 Canonical examples live at:
 
@@ -783,3 +820,5 @@ HRB-0 is complete when the project has agreed contracts for:
 - deterministic CI validation of required contract artifacts, fixture structure, and explicitly encoded invariants, without claiming full natural-language semantic consistency.
 
 Live Reviewer / Brief Compiler runtime execution remains intentionally deferred until these contracts are reviewed.
+
+HRB-0 final acceptance SHOULD stop iterative hardening once an isolated acceptance review finds no current contract defect or current implementation defect affecting HRB-0 core invariants. Future hardening, optional generalization, and nice-to-have improvements SHOULD move to backlog rather than indefinitely blocking HRB-0 closure.
