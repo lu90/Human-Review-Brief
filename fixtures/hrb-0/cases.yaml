@@ -226,3 +226,31 @@ cases:
     must_not:
       - claim independent review was achieved
       - omit the isolation limitation
+
+
+  - id: C12_HANDOFF_INPUT_ISOLATION
+    title: Canonical Fresh Reviewer handoff excludes inherited review context
+    input:
+      runtime_method: fresh_context
+      orchestrator_context_contains:
+        - implementation_conversation
+        - prior_findings
+        - prior_remediation_results
+        - prior_human_decisions
+    expected:
+      fresh_handoff:
+        template: handoffs/fresh-review.md
+        input_mode: whitelist
+        extra_context_policy: deny_by_default
+        prior_findings_visible: false
+        prior_remediation_visible: false
+        prior_human_decisions_visible: false
+        implementation_conversation_visible: false
+        freeform_context_append_allowed: false
+      isolation:
+        achieved_requires_conforming_handoff: true
+        status_if_forbidden_input_is_injected: unavailable
+        runtime_method_may_still_be: fresh_context
+    must_not:
+      - copy the Main Agent conversation into the Fresh Reviewer context
+      - append prior-round design summaries to help the Fresh Reviewer
