@@ -36,5 +36,6 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C09_REDACTED_EVIDENCE` — sensitive payload is removed while provenance survives.
 - `C10_REMEDIATION_ROUND` — fresh full review remains isolated from remediation verification.
 - `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
+- `C12_HANDOFF_INPUT_ISOLATION` — Fresh Reviewer handoffs are canonical, whitelist-only, and deny prior-review/implementation context.
 
 The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+.
