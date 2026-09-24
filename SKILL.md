@@ -143,7 +143,15 @@ Runtime `method` is one of:
 - `shared_context`;
 - `unknown`.
 
-Record `status: achieved` only when both the runtime context is isolated and the Fresh Reviewer handoff conforms to the canonical allowlist. If the context is fresh but forbidden prior-review or implementation context was injected into the handoff, record `status: unavailable` while preserving the actual runtime method.
+For every worker execution, record `status: achieved` only when both the runtime context is isolated and that worker's role/mode-specific canonical handoff conforms to its allowlist and forbidden-input rules.
+
+Apply this separately:
+
+- Fresh Review mode → `handoffs/fresh-review.md`;
+- Remediation Review mode → `handoffs/remediation-review.md`;
+- Brief Compiler → `handoffs/brief-compiler.md`.
+
+If a runtime context is isolated but any input forbidden by that worker's canonical handoff is injected, record `status: unavailable` while preserving the actual runtime method. For Remediation Review mode, this specifically means current-round Fresh Review findings MUST NOT be present.
 
 ### 4.1.1 Use the canonical Fresh Reviewer handoff
 
@@ -270,7 +278,9 @@ For each prior finding, return one status:
 
 Every remediation status MUST have supporting evidence.
 
-The Orchestrator records Remediation Review mode isolation status/method after the worker returns. A round-2+ brief MUST receive this metadata together with remediation results.
+The Orchestrator records Remediation Review mode isolation status/method after the worker returns. Record `status: achieved` only when the runtime context is isolated and the remediation handoff conforms to `handoffs/remediation-review.md`. If current-round Fresh Review findings or any other forbidden input are injected, record `status: unavailable` even if the runtime method itself is `fresh_context`, `isolated_subagent`, or `runtime_enforced`.
+
+A round-2+ brief MUST receive this metadata together with remediation results.
 
 After remediation returns, deterministically verify that its prior Finding IDs exactly equal the prior Review Round Record's Finding ID set: no omissions, no duplicates, and no current-round Fresh Finding IDs.
 

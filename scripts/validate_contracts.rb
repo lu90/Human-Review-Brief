@@ -386,6 +386,10 @@ require_path(c10, "C10", %w[expected remediation_review prior_findings_available
 require_path(c10, "C10", %w[expected remediation_review preserve_prior_finding_ids], true)
 require_path(c10, "C10", %w[expected remediation_review exact_prior_finding_coverage], true)
 require_path(c10, "C10", %w[expected remediation_review isolation_metadata_required], true)
+require_path(c10, "C10", %w[expected remediation_review achieved_requires_conforming_handoff], true)
+require_path(c10, "C10", %w[expected remediation_review current_round_fresh_findings_visible], false)
+require_path(c10, "C10", %w[expected remediation_review status_if_forbidden_input_is_injected], "unavailable")
+require_path(c10, "C10", %w[expected remediation_review isolated_runtime_method_may_still_be], "fresh_context")
 statuses = require_path(c10, "C10", %w[expected remediation_review allowed_status])
 fail_contract("C10: remediation statuses drifted") unless statuses == VALID_REMEDIATION_STATUS
 require_path(c10, "C10", %w[expected artifact review_round_record_required], true)
@@ -393,6 +397,7 @@ require_path(c10, "C10", %w[expected artifact record_ref_required], true)
 require_path(c10, "C10", %w[expected artifact prior_round_ref_must_match_previous_record_ref], true)
 require_path(c10, "C10", %w[expected artifact finding_ids_and_coverage_must_be_consistent], true)
 require_includes(c10["must_not"], "provide prior findings or remediation conclusions to the fresh reviewer", "C10.must_not")
+require_includes(c10["must_not"], "mark remediation isolation achieved when current-round Fresh Review findings are injected", "C10.must_not")
 require_includes(c10["must_not"], "renumber prior findings during remediation", "C10.must_not")
 
 c11 = by_id.fetch("C11_ISOLATION_UNAVAILABLE")

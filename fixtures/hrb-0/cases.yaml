@@ -211,6 +211,10 @@ cases:
         preserve_prior_finding_ids: true
         exact_prior_finding_coverage: true
         isolation_metadata_required: true
+        achieved_requires_conforming_handoff: true
+        current_round_fresh_findings_visible: false
+        status_if_forbidden_input_is_injected: unavailable
+        isolated_runtime_method_may_still_be: fresh_context
         allowed_status:
           - resolved
           - partially_resolved
@@ -225,6 +229,7 @@ cases:
     must_not:
       - replace the fresh full review with remediation review
       - provide prior findings or remediation conclusions to the fresh reviewer
+      - mark remediation isolation achieved when current-round Fresh Review findings are injected
       - renumber prior findings during remediation
 
   - id: C11_ISOLATION_UNAVAILABLE

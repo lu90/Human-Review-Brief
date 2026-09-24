@@ -31,7 +31,11 @@ First read **Review execution**. Confirm that:
 
 An omitted dimension is not equivalent to `no finding`.
 
-If this is round 2+, also confirm that the fresh full review ran before the separate remediation verification.
+If this is round 2+, also confirm that:
+
+- the fresh full review ran before the separate remediation verification;
+- Remediation Review mode isolation status and method are reported;
+- an isolated runtime was not marked `achieved` if the remediation handoff contained current-round Fresh Review findings or another forbidden input.
 
 If `.hrb/REVIEW_POLICY.md` changed, inspect that policy diff directly. A proposed policy change is human-owned and cannot authorize itself within the same PR.
 
