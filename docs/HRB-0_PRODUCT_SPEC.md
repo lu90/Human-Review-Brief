@@ -444,7 +444,14 @@ Isolation is factual orchestration metadata recorded by the Orchestrator, not a 
 - `status`: `achieved` or `unavailable`;
 - `method`: how the runtime actually separated (or failed to separate) the context.
 
-For HRB-0, `achieved` methods are `fresh_context`, `isolated_subagent`, or `runtime_enforced`. `unavailable` methods are `shared_context` or `unknown`.
+For HRB-0, runtime methods are `fresh_context`, `isolated_subagent`, `runtime_enforced`, `shared_context`, or `unknown`.
+
+`status: achieved` requires both:
+
+1. runtime context separation using `fresh_context`, `isolated_subagent`, or `runtime_enforced`; and
+2. a conforming fresh-review handoff that contains only the canonical allowlisted inputs and no forbidden prior-review or implementation context.
+
+A new chat or sub-agent alone is not proof of independent review. If the runtime context is fresh but the handoff itself contains forbidden context, isolation status is `unavailable` while the recorded runtime method may still be `fresh_context` or `isolated_subagent`.
 
 ### 12.2 Reviewer objective
 
@@ -604,6 +611,36 @@ The Reviewer and Brief Compiler SHOULD use separate contexts. They MAY use the s
 
 For HRB-0, one Reviewer may cover all specialist dimensions. The contract does not require eight separate specialist agents.
 
+### 17.1 Canonical handoff contracts
+
+The Orchestrator MUST construct worker inputs from canonical, role-specific handoff contracts rather than copying the Main Agent conversation or improvising a new prompt from accumulated context.
+
+HRB-0 defines three canonical handoff templates:
+
+- `handoffs/fresh-review.md`;
+- `handoffs/remediation-review.md`;
+- `handoffs/brief-compiler.md`.
+
+Each template has machine-readable front matter declaring:
+
+- role;
+- `input_mode: whitelist`;
+- allowed inputs;
+- forbidden inputs;
+- `extra_context_policy: deny_by_default`.
+
+When the runtime accepts a text prompt, the Orchestrator SHOULD instantiate the canonical template and substitute only its declared inputs. When a runtime uses structured messages or another worker API, it MAY render an equivalent handoff, but it MUST preserve the same allowlist, forbidden-input set, role boundary, and output boundary.
+
+The Orchestrator MUST NOT append free-form implementation narrative, prior-round design summaries, prior human decisions, or other undeclared context to a worker handoff. Platform/system safety instructions are outside this repository-level handoff contract and are not restricted by the allowlist.
+
+Fresh-review input isolation is deny-by-default. In particular, prior findings, prior remediation results, prior Human Review Briefs, prior human decisions, author rationale, and the implementation conversation MUST NOT enter the Fresh Reviewer handoff.
+
+Remediation review intentionally receives prior findings and the prior Review Round Record, but MUST NOT receive current-round Fresh Review findings.
+
+The Brief Compiler intentionally receives current Raw Findings, coverage, isolation metadata, remediation results when applicable, and evidence references, but MUST NOT receive the implementation conversation or author rationale as trusted context.
+
+The templates are stable execution contracts. Review-round-specific values change; the role prompt contract does not need to be rewritten each round.
+
 ## 18. Review Rounds and Review Round Record
 
 Round 1 is a fresh base→head review.
@@ -674,7 +711,8 @@ The canonical HRB-0 suite covers:
 - C08 same-PR review-policy changes;
 - C09 sensitive-evidence redaction with preserved provenance;
 - C10 round-2 fresh review plus remediation verification;
-- C11 unavailable reviewer isolation disclosure.
+- C11 unavailable reviewer isolation disclosure;
+- C12 canonical handoff input isolation.
 
 ## 20. HRB-0 Exit Criteria
 
@@ -692,6 +730,7 @@ HRB-0 is complete when the project has agreed contracts for:
 - human gates and stop rules;
 - orchestrator / Reviewer / Brief Compiler role boundaries;
 - Reviewer / Brief Compiler context isolation;
+- canonical role-specific handoff templates with deny-by-default input whitelists;
 - independent specialist review and isolation contract;
 - fixed specialist-dimension coverage;
 - adversarial review requirements;
