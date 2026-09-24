@@ -129,10 +129,35 @@ Prefer a separate sub-agent or fresh context that does not inherit the implement
 
 If true isolation is unavailable, explicitly report **independent review unavailable**. Do not relabel self-review as independent review.
 
-The Orchestrator records isolation metadata from how it actually launched the role; the worker does not self-certify isolation. Record:
+The Orchestrator records isolation metadata from how it actually launched the role; the worker does not self-certify isolation.
 
-- `status: achieved` with `method: fresh_context | isolated_subagent | runtime_enforced`; or
-- `status: unavailable` with `method: shared_context | unknown`.
+Runtime `method` is one of:
+
+- `fresh_context`;
+- `isolated_subagent`;
+- `runtime_enforced`;
+- `shared_context`;
+- `unknown`.
+
+Record `status: achieved` only when both the runtime context is isolated and the Fresh Reviewer handoff conforms to the canonical allowlist. If the context is fresh but forbidden prior-review or implementation context was injected into the handoff, record `status: unavailable` while preserving the actual runtime method.
+
+### 4.1.1 Use the canonical Fresh Reviewer handoff
+
+Use `handoffs/fresh-review.md` as the canonical Fresh Reviewer handoff contract.
+
+The Orchestrator MUST build the handoff from its declared allowlist. Do not copy the Main Agent conversation and then try to remove unwanted context. Start from an empty worker context and add only declared inputs.
+
+Do not append free-form:
+
+- implementation narrative;
+- author rationale;
+- prior findings;
+- prior remediation results;
+- prior Human Review Briefs;
+- prior human decisions;
+- prior-round design summaries.
+
+If the worker API does not accept a single text prompt, render an equivalent structured handoff that preserves the same allowlist, forbidden inputs, role boundary, and output boundary.
 
 ### 4.2 Review to disconfirm
 
@@ -201,10 +226,9 @@ Operations / Observability    reviewed — 1 finding
 Performance / Compatibility   reviewed — no finding
 Adversarial Challenge         reviewed — 1 finding
 
-Reviewer isolation:
-  status: achieved
-  method: fresh_context
 ```
+
+The Reviewer does not self-certify isolation. The Orchestrator attaches Reviewer isolation status/method after the worker returns.
 
 Reviewers produce findings, not merge decisions.
 
@@ -214,7 +238,7 @@ Return the Raw Findings and Review Coverage Manifest to the Orchestrator. Do not
 
 For review round 2 or later, first finish the fresh independent base→current-head review.
 
-Then start a separate remediation-review context using:
+Then start a separate remediation-review context using `handoffs/remediation-review.md` (or an equivalent structured rendering of that contract) with:
 
 - previous review head;
 - current review head;
@@ -236,7 +260,7 @@ Do not use remediation review as a substitute for the fresh full review.
 
 ## Step 6 — Launch Brief Compiler
 
-The Orchestrator starts a separate Brief Compiler context.
+The Orchestrator starts a separate Brief Compiler context using `handoffs/brief-compiler.md` (or an equivalent structured rendering of that contract).
 
 Give the Brief Compiler:
 
