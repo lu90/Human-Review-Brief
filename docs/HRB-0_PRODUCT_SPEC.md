@@ -454,12 +454,18 @@ Isolation is factual orchestration metadata recorded by the Orchestrator, not a 
 
 For HRB-0, runtime methods are `fresh_context`, `isolated_subagent`, `runtime_enforced`, `shared_context`, or `unknown`.
 
-`status: achieved` requires both:
+For every worker execution, `status: achieved` requires both:
 
 1. runtime context separation using `fresh_context`, `isolated_subagent`, or `runtime_enforced`; and
-2. a conforming fresh-review handoff that contains only the canonical allowlisted inputs and no forbidden prior-review or implementation context.
+2. a handoff that conforms to that worker's canonical role/mode-specific allowlist and contains none of that handoff's forbidden inputs.
 
-A new chat or sub-agent alone is not proof of independent review. If the runtime context is fresh but the handoff itself contains forbidden context, isolation status is `unavailable` while the recorded runtime method may still be `fresh_context` or `isolated_subagent`.
+This rule applies separately to:
+
+- **Fresh Review mode** — the handoff MUST conform to `handoffs/fresh-review.md`; prior findings, remediation conclusions, prior human decisions, author rationale, and implementation conversation remain excluded.
+- **Remediation Review mode** — the handoff MUST conform to `handoffs/remediation-review.md`; prior findings are intentionally allowed, but current-round Fresh Review findings remain forbidden.
+- **Brief Compiler** — the handoff MUST conform to `handoffs/brief-compiler.md`; current review findings and remediation results may be supplied, while implementation conversation, author rationale, and prior human decisions remain forbidden.
+
+A new chat or sub-agent alone is not proof of isolation. If the runtime context is isolated but a forbidden input is injected into that worker's handoff, isolation status MUST be `unavailable` while the recorded runtime method may still be `fresh_context`, `isolated_subagent`, or `runtime_enforced`.
 
 ### 12.2 Reviewer objective
 
