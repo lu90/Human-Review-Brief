@@ -2,31 +2,36 @@
 
 Human Review Brief (HRB) is a human-attention layer for AI-assisted software development.
 
-AI can generate code, specifications, tickets, tests, and review reports faster than a human can read them. HRB does not try to summarize everything. Its job is to decide what deserves human attention, preserve traceability to the source evidence, and produce a bounded review brief that a human can actually review.
+AI can generate code, specifications, tickets, tests, and review reports faster than a human can read them. HRB does not try to replace review with a filter. Its job is to organize all review findings by attention priority, preserve traceability to source evidence, and compile them into a review surface a human can actually work through.
 
 ## Core idea
 
 ```text
-Repository / PR / Spec / Tickets / CI
-                ↓
-      Repository Understanding
-                ↓
-         Evidence Collection
-                ↓
-        Attention Triage
-                ↓
-       Human Review Brief
-                ↓
-          Human Decision
+Main Agent / Orchestrator
+          │
+          ├── Reviewer
+          │     ├── Fresh Review mode → Raw Findings
+          │     └── Remediation Review mode → prior-finding status
+          │
+          └── Brief Compiler
+                Raw Findings → A1–A4 ordering
+                → complete Human Review Brief
+                         │
+                         ▼
+                    Human Decision
 ```
+
+The Reviewer and Brief Compiler are separate primary roles with separate contexts. The Reviewer has two execution modes: Fresh Review and, for round 2+, Remediation Review. Remediation Review is not a fourth primary role. The Reviewer optimizes for finding/evidencing problems or verifying remediation; the Brief Compiler optimizes for routing human attention without dropping important findings.
+
+Repositories may define a short, human-owned `.hrb/REVIEW_POLICY.md` for project-specific review rules. During a PR review, the base-SHA version governs; a policy change in the PR cannot authorize itself.
 
 ### Principles
 
 1. **Understand before summarizing.**
-   Build a repository-level mental model before judging individual artifacts.
+   Build enough repository context around the fixed PR scope before judging individual artifacts.
 
-2. **Triage, do not dump.**
-   The output is intentionally smaller than the available evidence.
+2. **Order and organize, do not silently filter.**
+   Every finding stays represented; the brief compresses evidence and partitions large review surfaces instead of hiding findings.
 
 3. **Evidence over confidence.**
    Every important claim should link back to source code, documentation, tests, issues, PRs, or CI evidence.
@@ -42,12 +47,19 @@ Repository / PR / Spec / Tickets / CI
 
 ## Proposed review model
 
-HRB will support two layers of repository understanding:
+HRB-0 is **PR-centered**.
 
-- **Bootstrap scan** — inspect the repository broadly and build a baseline understanding of architecture, domains, important artifacts, conventions, tests, and risk boundaries.
-- **Incremental review** — refresh only what changed, then relate those changes back to the baseline model.
+The default review moment is before a pull request is merged. The fixed review scope is the PR's base commit → head commit. The repository is available as context, but HRB expands outward from the diff only as needed: affected dependencies, relevant specifications, tests, standards, and CI evidence.
 
-The review pipeline will classify findings by both **risk** and **human-attention value**, then generate a compact Markdown brief with deep links such as:
+HRB-0 intentionally does **not** require a persisted repository-understanding cache or an invalidation engine. A later version may add one if repeated context reconstruction becomes a demonstrated bottleneck.
+
+For round 2+, HRB keeps the fresh independent `base → current head` review and adds a separate `previous review head → current head` remediation verification. A small Review Round Record preserves the factual handoff between rounds without feeding old conclusions into the fresh Reviewer.
+
+Raw Findings use stable IDs such as `R5-RF-01`: the sequence restarts each round, the round prefix keeps IDs unambiguous across the PR review lifecycle, and remediation always references the original prior-round ID unchanged.
+
+Worker prompts are not rewritten from scratch each round. HRB uses canonical role-specific handoff templates under `handoffs/`; the Orchestrator fills only declared inputs. Fresh-review handoffs are deny-by-default and exclude prior findings, remediation conclusions, previous human decisions, author rationale, and the implementation conversation.
+
+Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168
@@ -61,36 +73,50 @@ CI run #456
 ```markdown
 # Human Review Brief
 
-## 1. What changed
-Up to 5 material changes.
+## 1. Review scope and execution
+Pinned scope, Reviewer/Compiler isolation, and specialist coverage.
 
-## 2. Decisions requiring human judgment
+## 2. Remediation verification
+For round 2+, whether prior findings were actually addressed.
+
+## 3. What changed
+Up to 5 notable changes.
+
+## 4. Decisions requiring human judgment
 Up to 3 explicit decisions.
 
-## 3. High-risk findings
-Only findings that can materially affect correctness, architecture,
-security, data, compatibility, or operations.
+## 5. Findings by attention
+All findings ordered A1 Highest → A4 Low. Large finding sets are partitioned by topic/module/risk cluster instead of being omitted.
 
-## 4. Recommended deep reads
+## 6. Recommended deep reads
 A small set of exact files / line ranges / document sections, each with
 a reason why human attention is warranted.
 
-## 5. Spec and scope drift
+## 7. Spec and scope drift
 Missing requirements, changed assumptions, scope creep, and undocumented
 decisions.
 
-## 6. Verification evidence
+## 8. Verification evidence
 Tests, type checks, lint, CI, migrations, runtime validation, and gaps.
 
-## 7. Safe to skim
-Mechanical, generated, boilerplate, or otherwise low-attention changes.
+## 9. Finding coverage
+Which Raw Findings are represented in this brief or partition, including deduplication mappings.
 
-## 8. Human decision
+## 10. Human decision
 - [ ] Approve
 - [ ] Request changes
 - [ ] Deep review selected item
 ```
 
+## Contract authority
+
+When documents disagree:
+
+1. `docs/HRB-0_PRODUCT_SPEC.md` defines the product contract.
+2. `SKILL.md` defines the agent execution contract and MUST conform to the Product Spec.
+3. `HUMAN.md` defines the human review protocol and MUST conform to the Product Spec.
+4. `README.md` is an overview only and is not normative.
+
 ## Status
 
-The repository is in the initial design stage. The first milestone is to define the repository-understanding model, attention taxonomy, evidence/link format, and the contract for a bounded Human Review Brief.
+The repository is in the initial design stage. The first milestone is to define PR-scoped context construction, attention taxonomy, evidence chains, trust boundaries, and the contract for a bounded Human Review Brief.
