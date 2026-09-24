@@ -54,6 +54,8 @@ HRB-0 intentionally does **not** require a persisted repository-understanding ca
 
 For round 2+, HRB keeps the fresh independent `base → current head` review and adds a separate `previous review head → current head` remediation verification. A small Review Round Record preserves the factual handoff between rounds without feeding old conclusions into the fresh Reviewer.
 
+Worker prompts are not rewritten from scratch each round. HRB uses canonical role-specific handoff templates under `handoffs/`; the Orchestrator fills only declared inputs. Fresh-review handoffs are deny-by-default and exclude prior findings, remediation conclusions, previous human decisions, author rationale, and the implementation conversation.
+
 Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
 
 ```text
