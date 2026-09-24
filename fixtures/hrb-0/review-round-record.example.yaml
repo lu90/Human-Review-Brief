@@ -14,6 +14,9 @@ fresh_review:
     status: achieved
     method: fresh_context
   raw_findings_ref: "artifact://review-round-2/raw-findings"
+  finding_ids:
+    - R2-RF-01
+    - R2-RF-02
   coverage_manifest:
     spec_scope: reviewed_with_findings
     architecture_correctness: reviewed_with_findings
@@ -28,10 +31,7 @@ remediation_verification:
   performed: true
   scope: previous_review_head_to_current_head
   prior_round_ref: "artifact://review-round-1"
-  results:
-    - prior_finding_id: RF-01
-      status: resolved
-      evidence_ref: "artifact://review-round-2/remediation/RF-01"
+  results: []
 
 brief:
   compiler_isolation:

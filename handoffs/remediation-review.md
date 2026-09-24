@@ -56,7 +56,7 @@ Active base-SHA review policy, when present:
 
 Verify only whether each prior finding was actually addressed by the previous-review-head-to-current-head delta.
 
-For each prior finding return exactly one status:
+For each prior finding return exactly one status using that finding's original ID unchanged:
 
 - resolved
 - partially_resolved
@@ -64,7 +64,9 @@ For each prior finding return exactly one status:
 - superseded
 - cannot_verify
 
-Every status must have supporting primary evidence.
+Return exactly one result for every supplied prior Finding ID: no omissions, no duplicates, and no newly invented/current-round Finding IDs.
+
+Every status must have supporting primary evidence. Sanitize sensitive payloads before they leave the evidence-access context; preserve safe provenance and access-boundary information instead of copying secrets into remediation output.
 
 Do not use implementation-agent claims, commit messages, or prior reviewer conclusions as proof when primary evidence is available.
 

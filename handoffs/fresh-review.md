@@ -73,11 +73,16 @@ Cover every required specialist dimension:
 
 For each Raw Finding provide:
 
-1. claim;
-2. why it matters;
-3. sufficient evidence chain;
-4. affected risk dimensions;
-5. unresolved question, counterexample, or alternative interpretation.
+1. stable Finding ID using `R{{round}}-RF-{sequence}`, starting at `01` and incrementing within this round;
+2. claim;
+3. why it matters;
+4. sufficient evidence chain;
+5. affected risk dimensions;
+6. unresolved question, counterexample, or alternative interpretation.
+
+Finding IDs are immutable after emission. Do not invent prior-round relationships or reuse prior-round IDs.
+
+Before returning a Raw Finding, sanitize any sensitive payload copied from primary evidence. Preserve a safe source reference, provenance, supported claim, and original access boundary; do not copy the secret itself into the Raw Finding.
 
 Also return a Review Coverage Manifest that explicitly records every required dimension as reviewed with findings or reviewed with no finding.
 

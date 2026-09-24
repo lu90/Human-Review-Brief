@@ -75,7 +75,9 @@ Assign A1-A4 only as human-attention ordering labels:
 - A3 Normal Attention
 - A4 Low Attention
 
-The labels do not authorize omission or skipping. Preserve a traceable representation of every Raw Finding. Merge only true duplicates, record contributing Raw Finding IDs, and preserve disagreement or distinct evidence.
+The labels do not authorize omission or skipping. Preserve a traceable representation of every Raw Finding. Finding IDs are immutable: display and reference the full ID, including its round prefix, and never infer identity from a shared numeric suffix across rounds. Merge only true duplicates, record contributing Raw Finding IDs, and preserve disagreement or distinct evidence.
+
+If primary evidence inspected for clarification contains a sensitive payload, sanitize it before including any derivative in the brief or another handoff; preserve safe provenance and access-boundary information instead of the secret.
 
 If the finding set is too large for one practical brief, partition it instead of hiding lower-priority findings.
 

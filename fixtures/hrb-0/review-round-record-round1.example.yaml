@@ -14,6 +14,7 @@ fresh_review:
     status: achieved
     method: fresh_context
   raw_findings_ref: "artifact://review-round-1/raw-findings"
+  finding_ids: []
   coverage_manifest:
     spec_scope: reviewed_no_finding
     architecture_correctness: reviewed_no_finding

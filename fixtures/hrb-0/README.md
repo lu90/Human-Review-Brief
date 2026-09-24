@@ -7,7 +7,7 @@ They serve two purposes:
 1. **Behavioral regression contract** — define invariants current and future implementations must preserve.
 2. **Few-shot examples** — provide compact examples of expected review and attention-routing behavior when useful.
 
-The current deterministic CI validates fixture structure, legal enum values, required canonical cases, critical behavioral invariants, the minimum Review Round Record contract, and repository review-policy guardrails. It does not prove whether a live LLM's semantic judgment is correct.
+The current deterministic CI validates required contract artifacts, fixture structure, legal enum values, required canonical cases, critical behavioral invariants, Review Round Record structure/transition rules, and repository review-policy guardrails. It does not prove full natural-language semantic consistency or whether a live LLM's semantic judgment is correct.
 
 ## Golden expectations
 
@@ -37,5 +37,6 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C10_REMEDIATION_ROUND` — fresh full review remains isolated from remediation verification.
 - `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
 - `C12_HANDOFF_INPUT_ISOLATION` — Fresh Reviewer handoffs are canonical, whitelist-only, and deny prior-review/implementation context.
+- `C13_POLICY_INTRODUCED_SAME_PR` — a review policy introduced by the current PR is evidence only and cannot authorize that same PR.
 
 The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+.

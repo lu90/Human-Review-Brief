@@ -74,6 +74,7 @@ Ask:
 - Which claims are only asserted by an AI reviewer?
 - Has sensitive or private evidence been handled without leaking secrets or widening access?
 - If evidence was redacted, can I still tell where it came from and which claim it supports?
+- Has any sensitive payload leaked into a Raw Finding, persisted review artifact, worker handoff, or final brief instead of being sanitized at the evidence boundary?
 - Is the most important business behavior actually exercised?
 
 Do not equate "CI is green" with "the change is correct."
