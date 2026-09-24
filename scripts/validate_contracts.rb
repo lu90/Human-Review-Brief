@@ -15,7 +15,7 @@ VALID_EVIDENCE_ROLES = %w[
 ].freeze
 VALID_ISOLATION_STATUS = %w[achieved unavailable].freeze
 ACHIEVED_ISOLATION_METHODS = %w[fresh_context isolated_subagent runtime_enforced].freeze
-UNAVAILABLE_ISOLATION_METHODS = %w[shared_context unknown].freeze
+ALL_ISOLATION_METHODS = %w[fresh_context isolated_subagent runtime_enforced shared_context unknown].freeze
 VALID_COVERAGE = %w[reviewed_with_findings reviewed_no_finding].freeze
 VALID_REMEDIATION_STATUS = %w[
   resolved
@@ -37,6 +37,7 @@ REQUIRED_CASE_IDS = %w[
   C09_REDACTED_EVIDENCE
   C10_REMEDIATION_ROUND
   C11_ISOLATION_UNAVAILABLE
+  C12_HANDOFF_INPUT_ISOLATION
 ].freeze
 
 DIMENSIONS = %w[
@@ -87,14 +88,38 @@ def validate_isolation(value, label)
   method = value["method"]
   fail_contract("#{label}.status invalid") unless VALID_ISOLATION_STATUS.include?(status)
 
-  allowed_methods =
-    if status == "achieved"
-      ACHIEVED_ISOLATION_METHODS
-    else
-      UNAVAILABLE_ISOLATION_METHODS
-    end
+  fail_contract("#{label}.method #{method.inspect} is invalid") unless ALL_ISOLATION_METHODS.include?(method)
+  if status == "achieved" && !ACHIEVED_ISOLATION_METHODS.include?(method)
+    fail_contract("#{label}: achieved isolation requires an isolated runtime method")
+  end
+end
 
-  fail_contract("#{label}.method #{method.inspect} is invalid for status #{status}") unless allowed_methods.include?(method)
+def load_handoff_template(path)
+  text = File.read(path)
+  match = text.match(/\A---\n(.*?)\n---\n/m)
+  fail_contract("#{path}: missing YAML front matter") unless match
+
+  metadata = YAML.safe_load(match[1], aliases: false)
+  fail_contract("#{path}: front matter must be a mapping") unless metadata.is_a?(Hash)
+  [metadata, match.post_match]
+end
+
+def validate_handoff_template(path, role, allowed_inputs, forbidden_inputs)
+  metadata, body = load_handoff_template(path)
+  fail_contract("#{path}: schema_version must be 1") unless metadata["schema_version"] == 1
+  fail_contract("#{path}: artifact must be hrb-handoff-template") unless metadata["artifact"] == "hrb-handoff-template"
+  fail_contract("#{path}: role drifted") unless metadata["role"] == role
+  fail_contract("#{path}: input_mode must be whitelist") unless metadata["input_mode"] == "whitelist"
+  fail_contract("#{path}: extra_context_policy must be deny_by_default") unless metadata["extra_context_policy"] == "deny_by_default"
+  fail_contract("#{path}: allowed_inputs drifted") unless metadata["allowed_inputs"] == allowed_inputs
+  fail_contract("#{path}: forbidden_inputs drifted") unless metadata["forbidden_inputs"] == forbidden_inputs
+
+  allowed_inputs.each do |key|
+    fail_contract("#{path}: missing placeholder {{#{key}}}") unless body.include?("{{#{key}}}")
+  end
+  forbidden_inputs.each do |key|
+    fail_contract("#{path}: forbidden placeholder {{#{key}}}") if body.include?("{{#{key}}}")
+  end
 end
 
 def validate_round_record(round, label)
@@ -161,8 +186,11 @@ cases_path = "fixtures/hrb-0/cases.yaml"
 round1_path = "fixtures/hrb-0/review-round-record-round1.example.yaml"
 round2_path = "fixtures/hrb-0/review-round-record.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
+fresh_handoff_path = "handoffs/fresh-review.md"
+remediation_handoff_path = "handoffs/remediation-review.md"
+compiler_handoff_path = "handoffs/brief-compiler.md"
 
-[cases_path, round1_path, round2_path, policy_path].each do |path|
+[cases_path, round1_path, round2_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
@@ -289,6 +317,102 @@ require_path(c11, "C11", %w[expected reviewer isolation_status], "unavailable")
 require_path(c11, "C11", %w[expected reviewer isolation_method], "shared_context")
 require_path(c11, "C11", %w[expected brief must_disclose_isolation_failure], true)
 require_path(c11, "C11", %w[expected brief must_not_present_self_review_as_independent], true)
+
+c12 = by_id.fetch("C12_HANDOFF_INPUT_ISOLATION")
+require_path(c12, "C12", %w[expected fresh_handoff template], "handoffs/fresh-review.md")
+require_path(c12, "C12", %w[expected fresh_handoff input_mode], "whitelist")
+require_path(c12, "C12", %w[expected fresh_handoff extra_context_policy], "deny_by_default")
+%w[
+  prior_findings_visible
+  prior_remediation_visible
+  prior_human_decisions_visible
+  implementation_conversation_visible
+  freeform_context_append_allowed
+].each { |key| require_path(c12, "C12", ["expected", "fresh_handoff", key], false) }
+require_path(c12, "C12", %w[expected isolation achieved_requires_conforming_handoff], true)
+require_path(c12, "C12", %w[expected isolation status_if_forbidden_input_is_injected], "unavailable")
+require_path(c12, "C12", %w[expected isolation runtime_method_may_still_be], "fresh_context")
+require_includes(c12["must_not"], "copy the Main Agent conversation into the Fresh Reviewer context", "C12.must_not")
+require_includes(c12["must_not"], "append prior-round design summaries to help the Fresh Reviewer", "C12.must_not")
+
+validate_handoff_template(
+  fresh_handoff_path,
+  "fresh-reviewer",
+  %w[
+    repository
+    pr
+    round
+    base_sha
+    current_head_sha
+    originating_spec_refs
+    change_artifacts
+    relevant_repository_context
+    deterministic_verification_refs
+    active_base_review_policy
+  ],
+  %w[
+    implementation_conversation
+    author_rationale
+    prior_findings
+    prior_remediation_results
+    prior_human_review_briefs
+    prior_human_decisions
+    prior_round_design_summaries
+  ]
+)
+
+validate_handoff_template(
+  remediation_handoff_path,
+  "remediation-reviewer",
+  %w[
+    repository
+    pr
+    round
+    base_sha
+    previous_review_head
+    current_head_sha
+    prior_round_record
+    prior_findings
+    remediation_delta
+    deterministic_verification_refs
+    active_base_review_policy
+  ],
+  %w[
+    implementation_conversation
+    author_rationale
+    current_round_fresh_findings
+    current_round_human_review_brief
+    current_round_human_decisions
+  ]
+)
+
+validate_handoff_template(
+  compiler_handoff_path,
+  "brief-compiler",
+  %w[
+    repository
+    pr
+    round
+    base_sha
+    current_head_sha
+    previous_review_head
+    raw_findings
+    coverage_manifest
+    reviewer_isolation
+    remediation_results
+    compiler_isolation
+    evidence_refs
+    deterministic_verification_refs
+    spec_ticket_refs
+  ],
+  %w[
+    implementation_conversation
+    author_rationale
+    unreviewed_prior_findings
+    prior_human_discussion
+    prior_human_decisions
+  ]
+)
 
 round1 = YAML.safe_load(File.read(round1_path), aliases: false)
 round2 = YAML.safe_load(File.read(round2_path), aliases: false)
