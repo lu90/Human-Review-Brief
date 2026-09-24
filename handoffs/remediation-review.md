@@ -1,7 +1,8 @@
 ---
 schema_version: 1
 artifact: hrb-handoff-template
-role: remediation-reviewer
+role: reviewer
+mode: remediation-review
 input_mode: whitelist
 extra_context_policy: deny_by_default
 allowed_inputs:
@@ -26,7 +27,7 @@ forbidden_inputs:
 
 # HRB Remediation Verification
 
-You are the Remediation Reviewer for a completed prior review round.
+You are the Reviewer operating in Remediation Review mode for a completed prior review round.
 
 ## Fixed scope
 

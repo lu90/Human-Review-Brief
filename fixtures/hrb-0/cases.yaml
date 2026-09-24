@@ -198,14 +198,19 @@ cases:
         - R1-RF-01
     expected:
       fresh_review:
+        runtime_role: reviewer
+        mode: fresh-review
         scope: base_to_current_head
         prior_findings_visible_to_reviewer: false
         finding_id_format: "R{round}-RF-{sequence}"
       remediation_review:
+        runtime_role: reviewer
+        mode: remediation-review
         scope: previous_review_head_to_current_head
         prior_findings_available: true
         preserve_prior_finding_ids: true
         exact_prior_finding_coverage: true
+        isolation_metadata_required: true
         allowed_status:
           - resolved
           - partially_resolved
@@ -214,6 +219,9 @@ cases:
           - cannot_verify
       artifact:
         review_round_record_required: true
+        record_ref_required: true
+        prior_round_ref_must_match_previous_record_ref: true
+        finding_ids_and_coverage_must_be_consistent: true
     must_not:
       - replace the fresh full review with remediation review
       - provide prior findings or remediation conclusions to the fresh reviewer
@@ -247,6 +255,8 @@ cases:
     expected:
       fresh_handoff:
         template: handoffs/fresh-review.md
+        runtime_role: reviewer
+        mode: fresh-review
         input_mode: whitelist
         extra_context_policy: deny_by_default
         prior_findings_visible: false

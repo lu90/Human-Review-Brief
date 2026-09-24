@@ -1,5 +1,6 @@
 schema_version: 1
 artifact: hrb-review-round-record
+record_ref: "artifact://review-round-2"
 repository: lu90/example
 pr: 123
 round: 2
@@ -30,8 +31,14 @@ fresh_review:
 remediation_verification:
   performed: true
   scope: previous_review_head_to_current_head
+  reviewer_isolation:
+    status: achieved
+    method: fresh_context
   prior_round_ref: "artifact://review-round-1"
-  results: []
+  results:
+    - prior_finding_id: R1-RF-01
+      status: resolved
+      evidence_ref: "artifact://review-round-2/remediation/R1-RF-01"
 
 brief:
   compiler_isolation:

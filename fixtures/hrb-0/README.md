@@ -39,4 +39,4 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C12_HANDOFF_INPUT_ISOLATION` — Fresh Reviewer handoffs are canonical, whitelist-only, and deny prior-review/implementation context.
 - `C13_POLICY_INTRODUCED_SAME_PR` — a review policy introduced by the current PR is evidence only and cannot authorize that same PR.
 
-The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+.
+The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+. The paired round examples exercise a non-empty remediation transition; deterministic self-checks also cover the valid empty transition plus missing-result and duplicate-result rejection.

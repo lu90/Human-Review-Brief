@@ -106,11 +106,12 @@ def load_handoff_template(path)
   [metadata, match.post_match]
 end
 
-def validate_handoff_template(path, role, allowed_inputs, forbidden_inputs)
+def validate_handoff_template(path, role, mode, allowed_inputs, forbidden_inputs)
   metadata, body = load_handoff_template(path)
   fail_contract("#{path}: schema_version must be 1") unless metadata["schema_version"] == 1
   fail_contract("#{path}: artifact must be hrb-handoff-template") unless metadata["artifact"] == "hrb-handoff-template"
   fail_contract("#{path}: role drifted") unless metadata["role"] == role
+  fail_contract("#{path}: mode drifted") unless metadata["mode"] == mode
   fail_contract("#{path}: input_mode must be whitelist") unless metadata["input_mode"] == "whitelist"
   fail_contract("#{path}: extra_context_policy must be deny_by_default") unless metadata["extra_context_policy"] == "deny_by_default"
   fail_contract("#{path}: allowed_inputs drifted") unless metadata["allowed_inputs"] == allowed_inputs
@@ -137,27 +138,47 @@ def validate_finding_ids(ids, round_number, label)
   end
 end
 
-def validate_round_transition(previous, current, label)
-  fail_contract("#{label}: current round must immediately follow previous round") unless current["round"] == previous["round"] + 1
-  fail_contract("#{label}: repository changed across rounds") unless current["repository"] == previous["repository"]
-  fail_contract("#{label}: PR changed across rounds") unless current["pr"] == previous["pr"]
-  fail_contract("#{label}: base SHA changed across rounds") unless current["base_sha"] == previous["base_sha"]
-  fail_contract("#{label}: previous_review_head must equal prior current_review_head") unless current["previous_review_head"] == previous["current_review_head"]
+def round_transition_errors(previous, current)
+  errors = []
+  errors << "current round must immediately follow previous round" unless current["round"] == previous["round"] + 1
+  errors << "repository changed across rounds" unless current["repository"] == previous["repository"]
+  errors << "PR changed across rounds" unless current["pr"] == previous["pr"]
+  errors << "base SHA changed across rounds" unless current["base_sha"] == previous["base_sha"]
+  errors << "previous_review_head must equal prior current_review_head" unless current["previous_review_head"] == previous["current_review_head"]
+  errors << "prior_round_ref must equal prior record_ref" unless current.dig("remediation_verification", "prior_round_ref") == previous["record_ref"]
 
   prior_ids = previous.dig("fresh_review", "finding_ids")
   results = current.dig("remediation_verification", "results")
-  fail_contract("#{label}: prior finding IDs missing") unless prior_ids.is_a?(Array)
-  fail_contract("#{label}: remediation results missing") unless results.is_a?(Array)
+
+  unless prior_ids.is_a?(Array)
+    errors << "prior finding IDs missing"
+    return errors
+  end
+  unless results.is_a?(Array)
+    errors << "remediation results missing"
+    return errors
+  end
 
   result_ids = results.map { |result| result["prior_finding_id"] }
-  fail_contract("#{label}: remediation result IDs must be unique") unless result_ids.uniq.length == result_ids.length
-  fail_contract("#{label}: remediation results must exactly cover prior Finding IDs") unless result_ids.sort == prior_ids.sort
+  errors << "remediation result IDs must be unique" unless result_ids.uniq.length == result_ids.length
+  errors << "remediation results must exactly cover prior Finding IDs" unless result_ids.sort == prior_ids.sort
+  errors
+end
+
+def validate_round_transition(previous, current, label)
+  errors = round_transition_errors(previous, current)
+  fail_contract("#{label}: #{errors.join("; ")}") unless errors.empty?
+end
+
+def deep_copy(value)
+  Marshal.load(Marshal.dump(value))
 end
 
 def validate_round_record(round, label)
   fail_contract("#{label} must be a mapping") unless round.is_a?(Hash)
   fail_contract("#{label}: schema_version must be 1") unless round["schema_version"] == 1
   fail_contract("#{label}: artifact must be hrb-review-round-record") unless round["artifact"] == "hrb-review-round-record"
+  require_nonempty_string(round["record_ref"], "#{label}.record_ref")
   require_nonempty_string(round["repository"], "#{label}.repository")
   fail_contract("#{label}: pr must be a positive integer") unless round["pr"].is_a?(Integer) && round["pr"] > 0
   fail_contract("#{label}: round must be a positive integer") unless round["round"].is_a?(Integer) && round["round"] > 0
@@ -194,11 +215,16 @@ def validate_round_record(round, label)
     fail_contract("#{label}: #{dimension} invalid coverage status #{status}") unless VALID_COVERAGE.include?(status)
   end
 
+  has_finding_ids = !fresh["finding_ids"].empty?
+  has_finding_coverage = coverage.value?("reviewed_with_findings")
+  fail_contract("#{label}: Finding IDs and coverage manifest contradict each other") unless has_finding_ids == has_finding_coverage
+
   if round["round"] >= 2
     remediation = round["remediation_verification"]
     fail_contract("#{label}: round 2+ requires remediation_verification") unless remediation.is_a?(Hash)
     fail_contract("#{label}: remediation_verification.performed must be true") unless remediation["performed"] == true
     fail_contract("#{label}: invalid remediation scope") unless remediation["scope"] == "previous_review_head_to_current_head"
+    validate_isolation(remediation["reviewer_isolation"], "#{label}.remediation_verification.reviewer_isolation")
     require_nonempty_string(remediation["prior_round_ref"], "#{label}.remediation_verification.prior_round_ref")
     results = remediation["results"]
     fail_contract("#{label}: remediation results must be an array") unless results.is_a?(Array)
@@ -347,17 +373,25 @@ c09 = by_id.fetch("C09_REDACTED_EVIDENCE")
 require_includes(c09["must_not"], "copy the credential into a Raw Finding, persisted artifact, or worker handoff", "C09.must_not")
 
 c10 = by_id.fetch("C10_REMEDIATION_ROUND")
+require_path(c10, "C10", %w[expected fresh_review runtime_role], "reviewer")
+require_path(c10, "C10", %w[expected fresh_review mode], "fresh-review")
 require_path(c10, "C10", %w[expected fresh_review scope], "base_to_current_head")
 require_path(c10, "C10", %w[expected fresh_review prior_findings_visible_to_reviewer], false)
 require_path(c10, "C10", %w[expected fresh_review finding_id_format], "R{round}-RF-{sequence}")
 fail_contract("C10: prior finding IDs drifted") unless c10.dig("input", "prior_findings") == ["R1-RF-01"]
+require_path(c10, "C10", %w[expected remediation_review runtime_role], "reviewer")
+require_path(c10, "C10", %w[expected remediation_review mode], "remediation-review")
 require_path(c10, "C10", %w[expected remediation_review scope], "previous_review_head_to_current_head")
 require_path(c10, "C10", %w[expected remediation_review prior_findings_available], true)
 require_path(c10, "C10", %w[expected remediation_review preserve_prior_finding_ids], true)
 require_path(c10, "C10", %w[expected remediation_review exact_prior_finding_coverage], true)
+require_path(c10, "C10", %w[expected remediation_review isolation_metadata_required], true)
 statuses = require_path(c10, "C10", %w[expected remediation_review allowed_status])
 fail_contract("C10: remediation statuses drifted") unless statuses == VALID_REMEDIATION_STATUS
 require_path(c10, "C10", %w[expected artifact review_round_record_required], true)
+require_path(c10, "C10", %w[expected artifact record_ref_required], true)
+require_path(c10, "C10", %w[expected artifact prior_round_ref_must_match_previous_record_ref], true)
+require_path(c10, "C10", %w[expected artifact finding_ids_and_coverage_must_be_consistent], true)
 require_includes(c10["must_not"], "provide prior findings or remediation conclusions to the fresh reviewer", "C10.must_not")
 require_includes(c10["must_not"], "renumber prior findings during remediation", "C10.must_not")
 
@@ -369,6 +403,8 @@ require_path(c11, "C11", %w[expected brief must_not_present_self_review_as_indep
 
 c12 = by_id.fetch("C12_HANDOFF_INPUT_ISOLATION")
 require_path(c12, "C12", %w[expected fresh_handoff template], "handoffs/fresh-review.md")
+require_path(c12, "C12", %w[expected fresh_handoff runtime_role], "reviewer")
+require_path(c12, "C12", %w[expected fresh_handoff mode], "fresh-review")
 require_path(c12, "C12", %w[expected fresh_handoff input_mode], "whitelist")
 require_path(c12, "C12", %w[expected fresh_handoff extra_context_policy], "deny_by_default")
 %w[
@@ -397,7 +433,8 @@ require_includes(c13["must_not"], "let the introduced policy self-authorize the 
 
 validate_handoff_template(
   fresh_handoff_path,
-  "fresh-reviewer",
+  "reviewer",
+  "fresh-review",
   %w[
     repository
     pr
@@ -423,7 +460,8 @@ validate_handoff_template(
 
 validate_handoff_template(
   remediation_handoff_path,
-  "remediation-reviewer",
+  "reviewer",
+  "remediation-review",
   %w[
     repository
     pr
@@ -449,6 +487,7 @@ validate_handoff_template(
 validate_handoff_template(
   compiler_handoff_path,
   "brief-compiler",
+  "compile",
   %w[
     repository
     pr
@@ -460,6 +499,7 @@ validate_handoff_template(
     coverage_manifest
     reviewer_isolation
     remediation_results
+    remediation_reviewer_isolation
     compiler_isolation
     evidence_refs
     deterministic_verification_refs
@@ -481,6 +521,31 @@ fail_contract("round-2+ example must use round >= 2") unless round2["round"].is_
 validate_round_record(round1, "round-1 example")
 validate_round_record(round2, "round-2 example")
 validate_round_transition(round1, round2, "round-1 -> round-2 transition")
+
+# Exercise valid zero-finding lineage without replacing the canonical non-empty transition.
+zero_previous = deep_copy(round1)
+zero_previous["fresh_review"]["finding_ids"] = []
+zero_previous["fresh_review"]["coverage_manifest"] = DIMENSIONS.to_h { |dimension| [dimension, "reviewed_no_finding"] }
+zero_current = deep_copy(round2)
+zero_current["remediation_verification"]["results"] = []
+validate_round_record(zero_previous, "zero-finding previous round")
+validate_round_record(zero_current, "zero-finding current round")
+validate_round_transition(zero_previous, zero_current, "zero-finding transition")
+
+# Exercise negative transition paths through the same deterministic function.
+wrong_ref = deep_copy(round2)
+wrong_ref["remediation_verification"]["prior_round_ref"] = "artifact://unrelated-round"
+fail_contract("negative transition check: unrelated prior_round_ref was accepted") if round_transition_errors(round1, wrong_ref).empty?
+
+missing_result = deep_copy(round2)
+missing_result["remediation_verification"]["results"] = []
+missing_errors = round_transition_errors(round1, missing_result)
+fail_contract("negative transition check: missing remediation result was accepted") unless missing_errors.include?("remediation results must exactly cover prior Finding IDs")
+
+duplicate_result = deep_copy(round2)
+duplicate_result["remediation_verification"]["results"] << deep_copy(duplicate_result["remediation_verification"]["results"].first)
+duplicate_errors = round_transition_errors(round1, duplicate_result)
+fail_contract("negative transition check: duplicate remediation result was accepted") unless duplicate_errors.include?("remediation result IDs must be unique")
 
 policy_text = File.read(policy_path)
 fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")

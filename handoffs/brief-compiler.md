@@ -2,6 +2,7 @@
 schema_version: 1
 artifact: hrb-handoff-template
 role: brief-compiler
+mode: compile
 input_mode: whitelist
 extra_context_policy: deny_by_default
 allowed_inputs:
@@ -15,6 +16,7 @@ allowed_inputs:
   - coverage_manifest
   - reviewer_isolation
   - remediation_results
+  - remediation_reviewer_isolation
   - compiler_isolation
   - evidence_refs
   - deterministic_verification_refs
@@ -51,6 +53,9 @@ Reviewer isolation metadata:
 
 Remediation verification results, when applicable:
 {{remediation_results}}
+
+Remediation Review mode isolation metadata, when applicable:
+{{remediation_reviewer_isolation}}
 
 Brief Compiler isolation metadata:
 {{compiler_isolation}}

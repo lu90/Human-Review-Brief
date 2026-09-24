@@ -1,7 +1,8 @@
 ---
 schema_version: 1
 artifact: hrb-handoff-template
-role: fresh-reviewer
+role: reviewer
+mode: fresh-review
 input_mode: whitelist
 extra_context_policy: deny_by_default
 allowed_inputs:

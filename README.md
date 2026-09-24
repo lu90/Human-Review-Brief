@@ -10,7 +10,8 @@ AI can generate code, specifications, tickets, tests, and review reports faster 
 Main Agent / Orchestrator
           │
           ├── Reviewer
-          │     PR + repo → Raw Findings
+          │     ├── Fresh Review mode → Raw Findings
+          │     └── Remediation Review mode → prior-finding status
           │
           └── Brief Compiler
                 Raw Findings → A1–A4 ordering
@@ -20,7 +21,7 @@ Main Agent / Orchestrator
                     Human Decision
 ```
 
-The Reviewer and Brief Compiler are separate roles with separate contexts. The Reviewer optimizes for finding and evidencing problems; the Brief Compiler optimizes for routing human attention without dropping important findings.
+The Reviewer and Brief Compiler are separate primary roles with separate contexts. The Reviewer has two execution modes: Fresh Review and, for round 2+, Remediation Review. Remediation Review is not a fourth primary role. The Reviewer optimizes for finding/evidencing problems or verifying remediation; the Brief Compiler optimizes for routing human attention without dropping important findings.
 
 Repositories may define a short, human-owned `.hrb/REVIEW_POLICY.md` for project-specific review rules. During a PR review, the base-SHA version governs; a policy change in the PR cannot authorize itself.
 

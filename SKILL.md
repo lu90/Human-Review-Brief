@@ -11,10 +11,12 @@ Your job is to decide **what deserves human attention** and preserve a direct pa
 
 ## Role model
 
-HRB uses one orchestrator and two isolated worker roles:
+HRB uses one orchestrator and two primary worker roles:
 
 - **Orchestrator** — owns scope and handoffs.
-- **Reviewer** — independently reviews the PR and returns evidence-backed Raw Findings.
+- **Reviewer** — one primary runtime role with two execution modes:
+  - **Fresh Review mode** — independently reviews the fixed base→current-head PR and returns evidence-backed Raw Findings.
+  - **Remediation Review mode** — for round 2+, verifies prior findings against the previous-review-head→current-head remediation delta without seeing current-round Fresh Review findings.
 - **Brief Compiler** — performs A1–A4 attention triage and produces the Human Review Brief.
 
 Do not use the implementation agent as the independent Reviewer. Do not make the Reviewer also decide what can be hidden from the human. The Reviewer and Brief Compiler SHOULD use fresh, separate contexts.
@@ -247,9 +249,10 @@ Before launching remediation, deterministically validate the prior-round transit
 
 - current round equals prior round + 1;
 - repository, PR identifier, and base SHA match;
-- current previous-review head equals the prior current-review head.
+- current previous-review head equals the prior current-review head;
+- current remediation prior-round reference equals the prior Review Round Record's own stable record reference.
 
-Then start a separate remediation-review context using `handoffs/remediation-review.md` (or an equivalent structured rendering of that contract) with:
+Then start a separate Reviewer context in **Remediation Review mode** using `handoffs/remediation-review.md` (or an equivalent structured rendering of that contract) with:
 
 - previous review head;
 - current review head;
@@ -267,6 +270,8 @@ For each prior finding, return one status:
 
 Every remediation status MUST have supporting evidence.
 
+The Orchestrator records Remediation Review mode isolation status/method after the worker returns. A round-2+ brief MUST receive this metadata together with remediation results.
+
 After remediation returns, deterministically verify that its prior Finding IDs exactly equal the prior Review Round Record's Finding ID set: no omissions, no duplicates, and no current-round Fresh Finding IDs.
 
 Do not use remediation review as a substitute for the fresh full review.
@@ -279,8 +284,8 @@ Give the Brief Compiler:
 
 - fixed repository / PR / base / head scope;
 - Raw Findings;
-- Review Coverage Manifest and Reviewer isolation status/method;
-- remediation-verification results when this is round 2+;
+- Review Coverage Manifest and Fresh Review mode isolation status/method;
+- remediation-verification results and Remediation Review mode isolation status/method when this is round 2+;
 - evidence chains and primary anchors;
 - deterministic CI / test evidence;
 - relevant spec or ticket references.
@@ -380,9 +385,13 @@ Do not regenerate the entire brief.
 
 After each completed review round, the Orchestrator MUST emit a Review Round Record using the canonical contracts in `fixtures/hrb-0/review-round-record-round1.example.yaml` and `fixtures/hrb-0/review-round-record.example.yaml`.
 
-Round 1 MUST encode `previous_review_head: null` and `remediation_verification: null`. Round 2+ MUST record the previous review head and prior Review Round Record reference.
+Every Review Round Record MUST have a stable `record_ref` identifying that record.
+
+Round 1 MUST encode `previous_review_head: null` and `remediation_verification: null`. Round 2+ MUST record the previous review head and prior Review Round Record reference, and that `prior_round_ref` MUST equal the prior record's `record_ref`.
 
 Every record MUST also store the complete set of Finding IDs emitted by that round under the fresh-review metadata. The Orchestrator MUST validate Finding ID format, round prefix, sequence, and uniqueness before recording the round.
+
+The Finding ID set and Review Coverage Manifest MUST be minimally consistent: zero Finding IDs requires every dimension to be `reviewed_no_finding`; one or more Finding IDs requires at least one dimension to be `reviewed_with_findings`. HRB-0 does not require a per-dimension Finding-ID mapping.
 
 The record is factual metadata for later orchestration. Do not treat prior findings in the record as authority during a fresh independent review.
 

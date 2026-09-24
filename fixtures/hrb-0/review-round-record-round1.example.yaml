@@ -1,5 +1,6 @@
 schema_version: 1
 artifact: hrb-review-round-record
+record_ref: "artifact://review-round-1"
 repository: lu90/example
 pr: 123
 round: 1
@@ -14,9 +15,10 @@ fresh_review:
     status: achieved
     method: fresh_context
   raw_findings_ref: "artifact://review-round-1/raw-findings"
-  finding_ids: []
+  finding_ids:
+    - R1-RF-01
   coverage_manifest:
-    spec_scope: reviewed_no_finding
+    spec_scope: reviewed_with_findings
     architecture_correctness: reviewed_no_finding
     tests_verification: reviewed_no_finding
     security_privacy: reviewed_no_finding
