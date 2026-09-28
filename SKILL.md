@@ -475,7 +475,7 @@ review_head: FULL_SHA
 content: ...
 ```
 
-To resolve a payload reference, enumerate comments at the declared `payload_storage.discovery_ref`, select the expected marker, parse the YAML payload, match `record_ref` exactly, then validate repository, PR, `review_round_ref`, review head, and `payload_type`. Zero matches, multiple matches, malformed payload, wrong scope/head/type, or a missing referenced payload is a recovery failure. A Reference without a resolvable payload is not durable evidence.
+To resolve a payload reference, enumerate comments at the declared `payload_storage.discovery_ref`, select the expected marker, parse the YAML payload, match `record_ref` exactly, then validate repository, PR, `review_round_ref`, review head, `payload_type`, and the minimum body contract. `content` MUST be a non-null mapping. Raw Findings MUST expose a `findings` array whose Finding IDs exactly equal `fresh_review.finding_ids`, with a non-empty claim and evidence list per Finding. Human Review Brief payloads MUST contain non-empty markdown. Remediation-evidence payloads MUST match the referenced prior Finding ID and remediation status and contain non-empty evidence. Zero matches, multiple matches, malformed/empty payloads, omitted Finding IDs, or wrong scope/head/type is a recovery failure. A Reference without sufficient recoverable content is not durable evidence.
 
 Saving review metadata MUST NOT change the fixed PR head. Before writing, search for the same `record_ref`; if identical state already exists, reuse it rather than duplicating the write. After writing, read the comment back and validate it. If discovery, write, or read-back validation fails, do not advance.
 
@@ -525,7 +525,7 @@ Partial decisions may be saved immediately. They remain non-routable until all r
 
 The Agent may organize and record decisions but cannot make them. Every overall and finding decision must point to a persisted `decision_sources` entry with a non-empty captured human statement. If an external durable source exists it may also be referenced, but the record itself must contain enough explicit human wording to recover the decision without conversation context.
 
-A newer revision MUST point to the exact prior `record_ref` through `supersedes_ref`. Recovery follows this explicit chain; it MUST NOT guess the latest decision from timestamps. A fork, cycle, missing predecessor, or two unsuperseded complete decisions for the same scope blocks routing until reconciled.
+A newer revision MUST point to the exact prior `record_ref` through `supersedes_ref`. Recovery MUST validate the **entire current-scope revision graph before selecting an effective record**: record refs and revision numbers must be unique, every revision >1 must reference an existing predecessor in the same scope, every predecessor→successor edge must increment by exactly one revision, the whole graph must be acyclic, and exactly one unsuperseded effective record must remain. Recovery MUST NOT validate only the selected chain or guess the latest decision from timestamps. Any hidden cycle, fork, duplicate revision/ref, missing predecessor, or multiple effective records blocks routing.
 
 ### Validate before routing
 
@@ -561,15 +561,16 @@ A reviewed-head Decision MAY still authorize continuation of already-started wor
 
 1. the Decision was valid for its own Review Round/head when created;
 2. the current head is a descendant of the reviewed head on the same repository/PR delivery line;
-3. durable implementation-progress evidence identifies the Decision `record_ref` as its source and records the active route;
-4. that progress evidence records the reviewed/start head, current head, approved scope references, completed/pending slices, and current status;
-5. for implementation remediation, the progress scope includes only the Finding IDs explicitly dispositioned `remediate` by the Owner;
-6. for Spec-approved implementation, the approved canonical Spec/governing scope has not materially changed since the reviewed head; if it changed, return to Spec Review;
-7. repository evidence does not show scope drift beyond the approved Spec/remediation constraints.
+3. durable `delivery-progress` evidence identifies the Decision `record_ref` as its source and records the active route;
+4. that progress evidence records the reviewed/start head, current head, approved scope references, completed/pending slices, and one machine-readable status: `in_progress`, `verifying`, `ready_for_final_hrb`, or `ready_for_spec_hrb`;
+5. for implementation remediation, the progress scope exactly matches the Finding IDs explicitly dispositioned `remediate` by the Owner;
+6. for Spec-approved implementation, the approved canonical Spec/governing scope has not materially changed since the reviewed head;
+7. for a Spec Loop, the progress scope exactly matches the Owner's `spec_change_required` Finding IDs and the authorized change scope has not drifted;
+8. repository evidence does not show scope drift beyond the approved Spec/remediation/Spec-change constraints.
 
-Under those conditions, a fresh Orchestrator may resume implementation/remediation verification, update the Implementation Report/progress artifact, run code review/regression checks, and prepare the next HRB. The old Decision is **continuation authority**, not approval of the new head. If ancestry cannot be proven, the progress artifact is missing/stale, the source Decision does not match, or scope drift is detected, stop and recover/clarify rather than treating the Decision as stale approval.
+Under those conditions, a fresh Orchestrator may resume implementation, implementation remediation, or Spec remediation. `ready_for_final_hrb` resumes directly at Final HRB and requires no pending slices. `ready_for_spec_hrb` resumes directly at Spec HRB and requires no pending slices. These ready states are route-specific: Spec Loop cannot claim `ready_for_final_hrb`, and implementation routes cannot claim `ready_for_spec_hrb`. The old Decision is **continuation authority**, not approval of the new head. If ancestry cannot be proven, the progress artifact is missing/stale, the source Decision does not match, or scope drift is detected, stop and recover/clarify rather than treating the Decision as stale approval.
 
-Use the target repository's existing Implementation Report/progress convention for this durable continuation evidence; do not invent a parallel workflow database or separate implementation-progress skill.
+Use the target repository's existing Implementation Report/progress convention for this durable `delivery-progress` evidence; do not invent a parallel workflow database or separate progress skill.
 
 A new review head never inherits an old-head approval automatically. Re-run the applicable review gate before closeout or before treating the new head as approved. Automatic routing means the user does not need to name the next skill; it never grants a new external-write authorization.
 
