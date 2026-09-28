@@ -53,11 +53,11 @@ The default review moment is before a pull request is merged. The fixed review s
 
 HRB-0 intentionally does **not** require a persisted repository-understanding cache or an invalidation engine. A later version may add one if repeated context reconstruction becomes a demonstrated bottleneck.
 
-For round 2+, HRB keeps the fresh independent `base → current head` review and adds a separate `previous review head → current head` remediation verification. A small Review Round Record preserves the factual handoff between rounds without feeding old conclusions into the fresh Reviewer.
+For round 2+, HRB keeps the fresh independent `base → current head` review and adds a separate `previous review head → current head` remediation verification. A small Review Round Record preserves factual machine-review state without feeding old conclusions into the fresh Reviewer. A separate Review Decision Record preserves the Owner's explicit dispositions and routing state. Both use discoverable GitHub PR-comment storage so a fresh Orchestrator can recover them without relying on chat context or changing the reviewed head.
 
 Raw Findings use stable IDs such as `R5-RF-01`: the sequence restarts each round, the round prefix keeps IDs unambiguous across the PR review lifecycle, and remediation always references the original prior-round ID unchanged.
 
-Worker prompts are not rewritten from scratch each round. HRB uses canonical role-specific handoff templates under `handoffs/`; the Orchestrator fills only declared inputs. Fresh-review handoffs are deny-by-default and exclude prior findings, remediation conclusions, previous human decisions, author rationale, and the implementation conversation.
+Worker prompts are not rewritten from scratch each round. HRB uses canonical role-specific handoff templates under `handoffs/`; the Orchestrator fills only declared inputs. Fresh-review handoffs are deny-by-default and exclude prior findings, remediation conclusions, previous human decisions, author rationale, the implementation conversation, and the full Implementation Report. Final-review compilation may use the current Implementation Report after the Orchestrator verifies it is current.
 
 Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
 
@@ -117,6 +117,12 @@ When documents disagree:
 3. `HUMAN.md` defines the human review protocol and MUST conform to the Product Spec.
 4. `README.md` is an overview only and is not normative.
 
+## Durable review state
+
+PR-centered HRB uses marked GitHub PR comments for Review Round Records and Review Decision Records. Stable `hrb://github/...` record references plus explicit `supersedes_ref` chains make recovery deterministic; timestamps are not workflow state. Missing or invalid human decisions fail closed instead of being inferred from discussion.
+
+A valid Decision Record can route a fresh Orchestrator to continued Human Review, the Implementation Remediation Loop, the Spec Loop, tickets/authorized implementation after Spec approval, or closeout after Final approval. Those routes preserve their own external-write authorization gates.
+
 ## Status
 
-The repository is in the initial design stage. The first milestone is to define PR-scoped context construction, attention taxonomy, evidence chains, trust boundaries, and the contract for a bounded Human Review Brief.
+The repository is in the initial design stage. The current contracts cover PR-scoped context construction, attention taxonomy, evidence chains, trust boundaries, durable review state, and the bounded Human Review Brief.
