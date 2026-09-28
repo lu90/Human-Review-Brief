@@ -272,6 +272,8 @@ end
 
 def round_lineage_errors(previous, current, previous_decision, lineage_records)
   errors = round_transition_errors(previous, current)
+  prior_decision_errors = decision_record_errors(previous_decision, previous)
+  errors.concat(prior_decision_errors.map { |message| "prior decision invalid: #{message}" })
   inherited = current.dig("finding_continuity", "inherited")
   inherited = [] unless inherited.is_a?(Array)
   inherited_ids = inherited.map { |item| item["finding_id"] }
@@ -1198,9 +1200,11 @@ validate_decision_record(round1_decision, round1, "round-1 decision example")
 validate_round_transition(round1, round2, "round-1 -> round-2 transition")
 validate_round_lineage(round1, round2, round1_decision, [round1], "round-1 -> round-2 lineage")
 
-# Exercise actual PR-comment payload parsing and reference resolution.
+# Exercise actual PR-comment payload parsing and reference resolution for both canonical rounds.
+round1_payload_errors = resolve_round_payloads(round1, payload_comments)
+fail_contract("round-1 payload recovery failed: #{round1_payload_errors.join("; ")}") unless round1_payload_errors.empty?
 payload_errors = resolve_round_payloads(round2, payload_comments)
-fail_contract("payload recovery failed: #{payload_errors.join("; ")}") unless payload_errors.empty?
+fail_contract("round-2 payload recovery failed: #{payload_errors.join("; ")}") unless payload_errors.empty?
 
 missing_payload_comments = payload_comments.reject { |comment| comment["body"].include?("hrb-raw-findings:v1") }
 missing_payload_errors = resolve_round_payloads(round2, missing_payload_comments)
@@ -1341,6 +1345,13 @@ no_new_fresh["finding_continuity"]["inherited"].first["remediation_status"] = "u
 no_new_fresh["finding_continuity"]["decision_scope_finding_ids"] = ["R1-RF-01"]
 validate_round_record(no_new_fresh, "no-new-fresh inherited round")
 validate_round_lineage(round1, no_new_fresh, round1_decision, [round1], "no-new-fresh inherited lineage")
+
+# Negative: an invalid prior Decision cannot suppress carry-forward.
+forged_prior_decision = deep_copy(round1_decision)
+forged_prior_decision["review_head"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+forged_prior_decision["findings"].first["disposition"] = "accepted"
+forged_prior_errors = round_lineage_errors(round1, no_new_fresh, forged_prior_decision, [round1])
+fail_contract("negative lineage check: invalid prior Decision was trusted") unless forged_prior_errors.any? { |error| error.include?("prior decision invalid") }
 
 # Negative: remediation result remains unresolved, but the required prior Finding is deliberately omitted.
 omitted_carry = deep_copy(no_new_fresh)
