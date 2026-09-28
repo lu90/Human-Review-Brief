@@ -445,7 +445,12 @@ Use these markers:
 ```text
 <!-- hrb-review-round-record:v1 -->
 <!-- hrb-review-decision-record:v1 -->
+<!-- hrb-raw-findings:v1 -->
+<!-- hrb-human-review-brief:v1 -->
+<!-- hrb-remediation-evidence:v1 -->
 ```
+
+The Review Round Record MUST declare `payload_storage` with the same PR-comment discovery reference and the three payload markers. `fresh_review.raw_findings_ref`, `brief.brief_ref`, and every remediation `evidence_ref` are only valid when they resolve to an actual payload comment of the expected type.
 
 Store the complete machine-readable YAML record in the marked PR comment. Each record also carries:
 
@@ -455,6 +460,22 @@ Store the complete machine-readable YAML record in the marked PR comment. Each r
 - an `hrb://github/...` stable `record_ref`.
 
 A fresh Orchestrator recovers state by listing the PR comments from `discovery_ref`, selecting only comments with the canonical marker, parsing the complete record, and validating repository/PR/head/lineage before use. The stable `record_ref`, not comment timestamp, identifies a record.
+
+Review payload comments use the same envelope:
+
+```yaml
+schema_version: 1
+artifact: hrb-review-payload
+payload_type: raw_findings | human_review_brief | remediation_evidence
+record_ref: hrb://github/...
+repository: OWNER/REPO
+pr: NUMBER
+review_round_ref: hrb://github/.../review-round/...
+review_head: FULL_SHA
+content: ...
+```
+
+To resolve a payload reference, enumerate comments at the declared `payload_storage.discovery_ref`, select the expected marker, parse the YAML payload, match `record_ref` exactly, then validate repository, PR, `review_round_ref`, review head, and `payload_type`. Zero matches, multiple matches, malformed payload, wrong scope/head/type, or a missing referenced payload is a recovery failure. A Reference without a resolvable payload is not durable evidence.
 
 Saving review metadata MUST NOT change the fixed PR head. Before writing, search for the same `record_ref`; if identical state already exists, reuse it rather than duplicating the write. After writing, read the comment back and validate it. If discovery, write, or read-back validation fails, do not advance.
 
@@ -508,10 +529,10 @@ A newer revision MUST point to the exact prior `record_ref` through `supersedes_
 
 ### Validate before routing
 
-Before emitting a next action, validate that the Decision Record:
+Before emitting a **review-gate result**, validate that the Decision Record:
 
 - is readable from the declared durable source;
-- belongs to the same repository/PR and references the exact current Review Round Record and head;
+- belongs to the same repository/PR and references the exact Review Round Record and its reviewed head;
 - is the unique effective unsuperseded revision for this scope;
 - references only current Fresh IDs or valid inherited IDs from the recorded lineage;
 - covers every `required_finding_id` when `completion: complete`;
@@ -532,7 +553,40 @@ Route only after that validation:
 
 A Spec Review that requires change returns to the Spec Loop; it never enters code remediation. If implementation defects and Spec changes coexist, settle the Spec path first. `approve` cannot coexist with `remediate`, `spec_change_required`, or `unresolved`. Explicitly deferred work does not automatically block approval, but it cannot hide an incomplete in-scope requirement.
 
-A new review head does not inherit an old-head approval automatically. Re-run the applicable gate under the existing invalidation rules. Automatic routing means the user does not need to name the next skill; it never grants a new external-write authorization.
+### Reviewed-head authority vs in-progress continuation
+
+Exact-head matching is mandatory when a Decision Record is being used as an **approval/review-gate conclusion**. An approval for H1 MUST NOT approve H2.
+
+A reviewed-head Decision MAY still authorize continuation of already-started work after the branch advances beyond the reviewed head. This is a different use of the record and requires all of the following:
+
+1. the Decision was valid for its own Review Round/head when created;
+2. the current head is a descendant of the reviewed head on the same repository/PR delivery line;
+3. durable implementation-progress evidence identifies the Decision `record_ref` as its source and records the active route;
+4. that progress evidence records the reviewed/start head, current head, approved scope references, completed/pending slices, and current status;
+5. for implementation remediation, the progress scope includes only the Finding IDs explicitly dispositioned `remediate` by the Owner;
+6. for Spec-approved implementation, the approved canonical Spec/governing scope has not materially changed since the reviewed head; if it changed, return to Spec Review;
+7. repository evidence does not show scope drift beyond the approved Spec/remediation constraints.
+
+Under those conditions, a fresh Orchestrator may resume implementation/remediation verification, update the Implementation Report/progress artifact, run code review/regression checks, and prepare the next HRB. The old Decision is **continuation authority**, not approval of the new head. If ancestry cannot be proven, the progress artifact is missing/stale, the source Decision does not match, or scope drift is detected, stop and recover/clarify rather than treating the Decision as stale approval.
+
+Use the target repository's existing Implementation Report/progress convention for this durable continuation evidence; do not invent a parallel workflow database or separate implementation-progress skill.
+
+A new review head never inherits an old-head approval automatically. Re-run the applicable review gate before closeout or before treating the new head as approved. Automatic routing means the user does not need to name the next skill; it never grants a new external-write authorization.
+
+### Cross-round Finding carry-forward
+
+For round 2+, validate Finding continuity against both the prior Review Round Record and the effective prior Review Decision Record.
+
+The current `finding_continuity.inherited` set MUST contain every prior required Finding that still needs Owner attention. At minimum this includes:
+
+- any prior required Finding with Owner disposition `remediate`, `spec_change_required`, or `unresolved`;
+- any required Finding not yet dispositioned in a partial prior Decision.
+
+`accepted` findings do not need to remain in the next decision scope. `deferred` findings may leave the current decision scope only when the deferral was explicit and valid under the delivery contract.
+
+Every inherited `source_round_ref` MUST resolve to an actual Review Round Record in the same repository/PR/base lineage, with a lower round number, and that source record MUST contain the inherited Finding ID in its Fresh or decision-scope Finding set. A non-empty string alone is insufficient.
+
+The validator MUST reject an unresolved/remediation-required prior Finding that disappears from `inherited` / `decision_scope_finding_ids`, and MUST reject a source reference from another repository, PR, base lineage, or round that never contained the Finding ID.
 
 Do not commit generated Review Round or Review Decision records into the PR under review when that would mutate the fixed review head.
 
@@ -555,7 +609,9 @@ Stop and surface the issue instead of compressing it away when:
 - an important claim has no traceable evidence;
 - a Final HRB lacks a current applicable Implementation Report;
 - durable review-state discovery, persistence, or read-back validation fails;
-- a Review Decision Record is missing, contradictory, forked, stale for the current head, or lacks recoverable human decision source;
+- a Review Decision Record used as a gate is missing, contradictory, forked, wrong for its reviewed head, or lacks recoverable human decision source;
+- continuation is attempted without proven descendant ancestry plus durable in-scope progress evidence;
+- a referenced Raw Finding, Human Review Brief, or remediation-evidence payload cannot be resolved and validated;
 - the requested review scope has expanded enough that a new brief is warranted.
 
 ## Output rule
