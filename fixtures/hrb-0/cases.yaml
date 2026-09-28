@@ -296,3 +296,170 @@ cases:
     must_not:
       - treat a policy introduced by the current PR as active authority for that PR
       - let the introduced policy self-authorize the implementation change
+
+  - id: C14_DURABLE_REVIEW_STATE
+    title: Review state is durable and discoverable without moving the review head
+    input:
+      repository: lu90/example
+      pr: 123
+      review_head: "3333333333333333333333333333333333333333"
+      storage_provider: github_pr_comment
+    expected:
+      persistence:
+        round_marker: "hrb-review-round-record:v1"
+        decision_marker: "hrb-review-decision-record:v1"
+        discovery_ref: "github-pr-comments://lu90/example/pull/123"
+        stable_record_ref_required: true
+        read_back_required: true
+        review_head_unchanged: true
+    must_not:
+      - use artifact:// examples as proof of durable persistence
+      - advance after a failed write or failed read-back
+      - select effective state by comment timestamp alone
+
+  - id: C15_PARTIAL_DECISION
+    title: Partial Owner decisions are recoverable but cannot route engineering work
+    input:
+      decision_record: fixtures/hrb-0/review-decision-record-partial.example.yaml
+    expected:
+      decision:
+        completion: partial
+        route: human_review
+        missing_required_findings_allowed_while_partial: true
+        agent_may_fill_missing_decisions: false
+    must_not:
+      - infer approval from a partial record
+      - route to remediation, spec, implementation, or closeout while required decisions are missing
+
+  - id: C16_DECISION_ROUTING
+    title: Complete validated decisions route deterministically
+    input:
+      final_request_changes_spec_valid: fixtures/hrb-0/review-decision-record.example.yaml
+    expected:
+      routes:
+        spec_approve_still_valid: tickets_or_implementation
+        final_approve_still_valid: closeout
+        final_request_changes_still_valid: implementation_remediation
+        request_changes_change_required: spec_loop
+        deep_review_incomplete: human_review
+      preserve_authorization_gates: true
+    must_not:
+      - route request_changes using the overall decision without per-finding dispositions
+      - treat automatic routing as external write authorization
+
+  - id: C17_FINDING_CONTINUITY
+    title: Prior Finding IDs remain traceable across review rounds
+    input:
+      prior_finding_id: R1-RF-01
+      current_round: 2
+      current_fresh_findings:
+        - R2-RF-01
+        - R2-RF-02
+    expected:
+      continuity:
+        preserve_original_finding_id: true
+        source_round_ref_required: true
+        inherited_ids_must_be_in_prior_lineage: true
+        decision_scope_includes_inherited_ids: true
+        zero_new_fresh_findings_may_still_have_inherited_scope: true
+        machine_status_separate_from_owner_disposition: true
+    must_not:
+      - renumber an inherited finding to the current round
+      - require Fresh Review to rediscover an inherited finding before tracking it
+      - silently discard a prior unresolved finding
+
+  - id: C18_DECISION_SOURCE
+    title: Owner decisions require recoverable human statements
+    input:
+      agent_summary: "The user probably approves."
+      metadata_label: "created_by: human_review"
+    expected:
+      source:
+        decided_by_and_recorded_by_distinct_fields: true
+        captured_human_statement_required: true
+        ordinary_discussion_is_approval: false
+        agent_inference_is_approval: false
+    must_not:
+      - manufacture an Owner decision
+      - treat a workflow label as proof of human approval
+
+  - id: C19_IMPLEMENTATION_REPORT_GATE
+    title: Final HRB requires a current durable Implementation Report
+    input:
+      final_review_report_status: stale
+      spec_review_report_status: missing
+    expected:
+      final_review:
+        stale_report_blocks: true
+        return_to_report_update: true
+        report_committed_before_head_is_pinned_when_tracked: true
+      spec_review:
+        missing_report_blocks: false
+      isolation:
+        full_report_visible_to_fresh_reviewer: false
+        full_report_available_to_compiler: true
+        indirect_prior_review_material_removed: true
+    must_not:
+      - run Final HRB against a stale Implementation Report
+      - block Spec HRB because an Implementation Report is absent
+      - leak prior human decisions through the report into Fresh Review
+
+  - id: C20_HEAD_INVALIDATION
+    title: Approval for an old review head cannot route a new head
+    input:
+      decision_review_head: "3333333333333333333333333333333333333333"
+      current_review_head: "4444444444444444444444444444444444444444"
+    expected:
+      decision:
+        valid_for_current_head: false
+        route: human_review
+    must_not:
+      - inherit old-head approval onto a new head
+      - skip the applicable fresh review after a material head change
+
+  - id: C21_RECOVERY_IDEMPOTENCE
+    title: Fresh Orchestrator recovers state without duplicate side effects
+    input:
+      repository: lu90/example
+      pr: 123
+      existing_record_ref: "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-2@3333333333333333333333333333333333333333"
+    expected:
+      recovery:
+        discover_by_repository_and_pr: true
+        explicit_supersession_chain_required: true
+        duplicate_record_write_avoided: true
+        completed_step_not_repeated: true
+        duplicate_external_write_avoided: true
+    must_not:
+      - choose the latest comment only by timestamp
+      - recreate an already persisted identical record
+      - repeat an external write solely because the session restarted
+
+  - id: C22_AUTHORIZATION_BOUNDARY
+    title: Review decisions do not expand external-write authority
+    input:
+      final_decision: approve
+      closeout_write_authorized: false
+    expected:
+      routing:
+        next_phase: closeout
+        merge_authorized_by_hrb: false
+        tracker_write_authorized_by_hrb: false
+        follow_up_issue_requires_tracker_and_write_authorization: true
+    must_not:
+      - merge because HRB was approved
+      - create a follow-up issue without tracker configuration and write authorization
+
+  - id: C23_LEGACY_COMPATIBILITY
+    title: Legacy Review Round Records remain readable without synthesized approval
+    input:
+      legacy_round_record_has_decision_record: false
+    expected:
+      compatibility:
+        round_record_readable: true
+        automatic_historical_approval_created: false
+        engineering_route_without_decision: blocked
+    must_not:
+      - invent a Review Decision Record for an old round
+      - convert absence of a decision into approval
+
