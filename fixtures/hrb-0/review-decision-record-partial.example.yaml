@@ -1,0 +1,37 @@
+schema_version: 1
+artifact: hrb-review-decision-record
+record_ref: "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-1@3333333333333333333333333333333333333333"
+storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  marker: "hrb-review-decision-record:v1"
+repository: lu90/example
+pr: 123
+review_round_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+review_head: "3333333333333333333333333333333333333333"
+stage: final_review
+revision: 1
+supersedes_ref: null
+completion: partial
+overall_decision: deep_review_incomplete
+spec_status: unresolved
+required_finding_ids:
+  - R2-RF-01
+  - R2-RF-02
+  - R1-RF-01
+decision_sources:
+  - source_id: owner-1
+    decided_by: owner
+    recorded_by: orchestrator
+    source_kind: human_statement
+    captured_statement: "R1-RF-01 is acceptable after the fix. I need deeper review before deciding the remaining findings."
+    durable_source_ref: null
+overall_decision_source_ids:
+  - owner-1
+findings:
+  - finding_id: R1-RF-01
+    disposition: accepted
+    owner_decision: "Accept the remediated state."
+    remediation_constraints: []
+    decision_source_ids:
+      - owner-1
