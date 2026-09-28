@@ -1,0 +1,60 @@
+version: 1
+suite: HRB-0-review-payload-comments
+comments:
+  - body: |
+      <!-- hrb-raw-findings:v1 -->
+      ```yaml
+      schema_version: 1
+      artifact: hrb-review-payload
+      payload_type: raw_findings
+      record_ref: "hrb://github/lu90/example/pull/123/review-round/2/raw-findings@3333333333333333333333333333333333333333"
+      repository: lu90/example
+      pr: 123
+      review_round_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+      review_head: "3333333333333333333333333333333333333333"
+      content:
+        findings:
+          - finding_id: R2-RF-01
+            claim: "The first current-round issue requires remediation."
+            evidence:
+              - "src/example.rb:10-20"
+          - finding_id: R2-RF-02
+            claim: "The second current-round issue requires remediation."
+            evidence:
+              - "spec/example.md:30-40"
+      ```
+
+  - body: |
+      <!-- hrb-human-review-brief:v1 -->
+      ```yaml
+      schema_version: 1
+      artifact: hrb-review-payload
+      payload_type: human_review_brief
+      record_ref: "hrb://github/lu90/example/pull/123/review-round/2/human-review-brief@3333333333333333333333333333333333333333"
+      repository: lu90/example
+      pr: 123
+      review_round_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+      review_head: "3333333333333333333333333333333333333333"
+      content:
+        markdown: |
+          # Human Review Brief
+          R2-RF-01 and R2-RF-02 require Owner review.
+      ```
+
+  - body: |
+      <!-- hrb-remediation-evidence:v1 -->
+      ```yaml
+      schema_version: 1
+      artifact: hrb-review-payload
+      payload_type: remediation_evidence
+      record_ref: "hrb://github/lu90/example/pull/123/review-round/2/remediation/R1-RF-01@3333333333333333333333333333333333333333"
+      repository: lu90/example
+      pr: 123
+      review_round_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+      review_head: "3333333333333333333333333333333333333333"
+      content:
+        prior_finding_id: R1-RF-01
+        status: resolved
+        evidence:
+          - "src/example.rb:50-60"
+      ```
