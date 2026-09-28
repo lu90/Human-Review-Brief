@@ -189,6 +189,11 @@ def recover_record_by_ref(comments, marker, artifact, record_ref)
   [matches.length == 1 ? matches.first : nil, errors]
 end
 
+def render_yaml_comment(marker, record)
+  yaml = YAML.dump(record).sub(/\A---\s*\n/, "")
+  { "body" => "<!-- #{marker} -->\n```yaml\n#{yaml}```" }
+end
+
 def resolve_payload(comments, marker, payload_type, record_ref, round)
   payload, errors = recover_record_by_ref(comments, marker, "hrb-review-payload", record_ref)
   return [nil, errors] unless payload
@@ -1001,9 +1006,13 @@ require_includes(c13["must_not"], "let the introduced policy self-authorize the 
 c14 = by_id.fetch("C14_DURABLE_REVIEW_STATE")
 require_path(c14, "C14", %w[expected persistence round_marker], ROUND_RECORD_MARKER)
 require_path(c14, "C14", %w[expected persistence decision_marker], DECISION_RECORD_MARKER)
+require_path(c14, "C14", %w[expected persistence raw_findings_marker], RAW_FINDINGS_MARKER)
+require_path(c14, "C14", %w[expected persistence human_review_brief_marker], HUMAN_REVIEW_BRIEF_MARKER)
+require_path(c14, "C14", %w[expected persistence remediation_evidence_marker], REMEDIATION_EVIDENCE_MARKER)
 require_path(c14, "C14", %w[expected persistence discovery_ref], "github-pr-comments://lu90/example/pull/123")
 require_path(c14, "C14", %w[expected persistence stable_record_ref_required], true)
 require_path(c14, "C14", %w[expected persistence read_back_required], true)
+require_path(c14, "C14", %w[expected persistence referenced_payloads_must_resolve], true)
 require_path(c14, "C14", %w[expected persistence review_head_unchanged], true)
 require_includes(c14["must_not"], "use artifact:// examples as proof of durable persistence", "C14.must_not")
 require_includes(c14["must_not"], "select effective state by comment timestamp alone", "C14.must_not")
@@ -1030,6 +1039,9 @@ c17 = by_id.fetch("C17_FINDING_CONTINUITY")
   decision_scope_includes_inherited_ids
   zero_new_fresh_findings_may_still_have_inherited_scope
   machine_status_separate_from_owner_disposition
+  required_prior_owner_actions_must_carry_forward
+  source_round_must_own_finding
+  source_round_must_share_repository_pr_base_lineage
 ].each { |key| require_path(c17, "C17", ["expected", "continuity", key], true) }
 require_includes(c17["must_not"], "renumber an inherited finding to the current round", "C17.must_not")
 require_includes(c17["must_not"], "silently discard a prior unresolved finding", "C17.must_not")
@@ -1050,13 +1062,20 @@ require_path(c19, "C19", %w[expected isolation full_report_available_to_compiler
 require_path(c19, "C19", %w[expected isolation indirect_prior_review_material_removed], true)
 
 c20 = by_id.fetch("C20_HEAD_INVALIDATION")
-require_path(c20, "C20", %w[expected decision valid_for_current_head], false)
-require_path(c20, "C20", %w[expected decision route], "blocked")
+require_path(c20, "C20", %w[expected decision valid_as_new_head_approval], false)
+require_path(c20, "C20", %w[expected decision gate_route], "blocked")
+require_path(c20, "C20", %w[expected decision continuation_route], "implementation_remediation")
+require_path(c20, "C20", %w[expected decision continuation_requires_descendant_head], true)
+require_path(c20, "C20", %w[expected decision continuation_requires_durable_progress], true)
+require_path(c20, "C20", %w[expected decision continuation_requires_scope_match], true)
 
 c21 = by_id.fetch("C21_RECOVERY_IDEMPOTENCE")
 %w[
   discover_by_repository_and_pr
   explicit_supersession_chain_required
+  actual_comment_parser_exercised
+  payload_reference_resolution_exercised
+  effective_decision_recovery_exercised
   duplicate_record_write_avoided
   completed_step_not_repeated
   duplicate_external_write_avoided
