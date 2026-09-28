@@ -1,0 +1,49 @@
+schema_version: 1
+artifact: hrb-review-decision-record
+record_ref: "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-2@3333333333333333333333333333333333333333"
+storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  marker: "hrb-review-decision-record:v1"
+repository: lu90/example
+pr: 123
+review_round_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+review_head: "3333333333333333333333333333333333333333"
+stage: final_review
+revision: 2
+supersedes_ref: "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-1@3333333333333333333333333333333333333333"
+completion: complete
+overall_decision: request_changes
+spec_status: still_valid
+required_finding_ids:
+  - R2-RF-01
+  - R2-RF-02
+  - R1-RF-01
+decision_sources:
+  - source_id: owner-2
+    decided_by: owner
+    recorded_by: orchestrator
+    source_kind: human_statement
+    captured_statement: "Keep the current spec. Fix R2-RF-01 and R2-RF-02, and accept R1-RF-01 as resolved."
+    durable_source_ref: null
+overall_decision_source_ids:
+  - owner-2
+findings:
+  - finding_id: R2-RF-01
+    disposition: remediate
+    owner_decision: "Fix this finding within the approved implementation scope."
+    remediation_constraints: []
+    decision_source_ids:
+      - owner-2
+  - finding_id: R2-RF-02
+    disposition: remediate
+    owner_decision: "Fix this finding within the approved implementation scope."
+    remediation_constraints: []
+    decision_source_ids:
+      - owner-2
+  - finding_id: R1-RF-01
+    disposition: accepted
+    owner_decision: "Accept the remediated state."
+    remediation_constraints: []
+    decision_source_ids:
+      - owner-2
