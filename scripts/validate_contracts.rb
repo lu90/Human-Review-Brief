@@ -682,6 +682,117 @@ def decision_route(decision, round)
   "blocked"
 end
 
+def gate_route_for_head(decision, round, current_head)
+  return "blocked" unless current_head == decision["review_head"]
+
+  decision_route(decision, round)
+end
+
+def continuation_errors(decision, round, current_head, descendant_pairs, progress)
+  errors = decision_record_errors(decision, round)
+  return errors unless errors.empty?
+
+  reviewed_head = decision["review_head"]
+  route = decision_route(decision, round)
+  allowed_routes = %w[tickets_or_implementation implementation_remediation]
+  errors << "decision route is not resumable work" unless allowed_routes.include?(route)
+
+  descendant = descendant_pairs.include?([reviewed_head, current_head])
+  errors << "current head is not a proven descendant of reviewed head" unless descendant
+
+  unless progress.is_a?(Hash)
+    errors << "durable implementation progress is missing"
+    return errors
+  end
+
+  errors << "progress artifact must be implementation-progress" unless progress["artifact"] == "implementation-progress"
+  errors << "progress repository mismatch" unless progress["repository"] == round["repository"]
+  errors << "progress PR mismatch" unless progress["pr"] == round["pr"]
+  errors << "progress source_decision_ref mismatch" unless progress["source_decision_ref"] == decision["record_ref"]
+  errors << "progress route mismatch" unless progress["route"] == route
+  errors << "progress start_head mismatch" unless progress["start_head"] == reviewed_head
+  errors << "progress current_head mismatch" unless progress["current_head"] == current_head
+  errors << "progress status must be in_progress or verifying" unless %w[in_progress verifying].include?(progress["status"])
+  errors << "progress completed_slices must be an array" unless progress["completed_slices"].is_a?(Array)
+  errors << "progress pending_slices must be an array" unless progress["pending_slices"].is_a?(Array)
+
+  scope = progress["scope"]
+  unless scope.is_a?(Hash)
+    errors << "progress scope must be a mapping"
+    return errors
+  end
+
+  if route == "implementation_remediation"
+    remediate_ids = decision.fetch("findings", [])
+      .select { |item| item["disposition"] == "remediate" }
+      .map { |item| item["finding_id"] }
+    progress_ids = scope["finding_ids"]
+    errors << "remediation progress finding_ids must be an array" unless progress_ids.is_a?(Array)
+    if progress_ids.is_a?(Array)
+      errors << "remediation progress scope must exactly match Owner remediate findings" unless progress_ids.sort == remediate_ids.sort
+    end
+  elsif route == "tickets_or_implementation"
+    approved_spec_ref = scope["approved_spec_ref"]
+    errors << "implementation progress requires approved_spec_ref" unless approved_spec_ref.is_a?(String) && !approved_spec_ref.empty?
+    errors << "governing scope changed since Spec approval" unless scope["governing_scope_unchanged"] == true
+  end
+
+  errors
+end
+
+def continuation_route(decision, round, current_head, descendant_pairs, progress)
+  errors = continuation_errors(decision, round, current_head, descendant_pairs, progress)
+  return ["blocked", errors] unless errors.empty?
+
+  [decision_route(decision, round), []]
+end
+
+def recover_effective_decision(comments, round)
+  records, errors = recover_marked_records(comments, DECISION_RECORD_MARKER, "hrb-review-decision-record")
+  scoped = records.select do |record|
+    record["repository"] == round["repository"] &&
+      record["pr"] == round["pr"] &&
+      record["review_round_ref"] == round["record_ref"]
+  end
+
+  scoped.each do |record|
+    record_errors = decision_record_errors(record, round)
+    errors.concat(record_errors.map { |message| "#{record["record_ref"]}: #{message}" })
+  end
+  return [nil, errors] unless errors.empty?
+
+  refs = scoped.to_h { |record| [record["record_ref"], record] }
+  superseded_refs = scoped.map { |record| record["supersedes_ref"] }.compact
+  effective = scoped.reject { |record| superseded_refs.include?(record["record_ref"]) }
+
+  if effective.length != 1
+    errors << "expected exactly one effective unsuperseded decision, got #{effective.length}"
+    return [nil, errors]
+  end
+
+  cursor = effective.first
+  seen = {}
+  while cursor["revision"] > 1
+    if seen[cursor["record_ref"]]
+      errors << "decision supersession cycle detected"
+      break
+    end
+    seen[cursor["record_ref"]] = true
+
+    previous = refs[cursor["supersedes_ref"]]
+    unless previous
+      errors << "decision supersession predecessor missing"
+      break
+    end
+
+    revision_errors = decision_revision_errors(previous, cursor)
+    errors.concat(revision_errors)
+    cursor = previous
+  end
+
+  [errors.empty? ? effective.first : nil, errors]
+end
+
 def legacy_round_readable?(round)
   round.is_a?(Hash) &&
     round["schema_version"] == 1 &&
@@ -699,14 +810,16 @@ readme_path = "README.md"
 cases_path = "fixtures/hrb-0/cases.yaml"
 round1_path = "fixtures/hrb-0/review-round-record-round1.example.yaml"
 round2_path = "fixtures/hrb-0/review-round-record.example.yaml"
+round1_decision_path = "fixtures/hrb-0/review-decision-record-round1.example.yaml"
 partial_decision_path = "fixtures/hrb-0/review-decision-record-partial.example.yaml"
 decision_path = "fixtures/hrb-0/review-decision-record.example.yaml"
+payload_comments_path = "fixtures/hrb-0/review-payload-comments.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
 fresh_handoff_path = "handoffs/fresh-review.md"
 remediation_handoff_path = "handoffs/remediation-review.md"
 compiler_handoff_path = "handoffs/brief-compiler.md"
 
-[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, partial_decision_path, decision_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
+[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, round1_decision_path, partial_decision_path, decision_path, payload_comments_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
