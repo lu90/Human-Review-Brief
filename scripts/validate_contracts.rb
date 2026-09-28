@@ -24,6 +24,19 @@ VALID_REMEDIATION_STATUS = %w[
   superseded
   cannot_verify
 ].freeze
+VALID_REVIEW_STAGE = %w[spec_review final_review].freeze
+VALID_DECISION_COMPLETION = %w[partial complete].freeze
+VALID_OVERALL_DECISION = %w[approve request_changes deep_review_incomplete].freeze
+VALID_SPEC_STATUS = %w[still_valid change_required unresolved].freeze
+VALID_FINDING_DISPOSITION = %w[
+  accepted
+  remediate
+  deferred
+  spec_change_required
+  unresolved
+].freeze
+ROUND_RECORD_MARKER = "hrb-review-round-record:v1"
+DECISION_RECORD_MARKER = "hrb-review-decision-record:v1"
 FINDING_ID_PATTERN = /\AR(\d+)-RF-(\d{2,})\z/.freeze
 
 REQUIRED_CASE_IDS = %w[
@@ -40,6 +53,16 @@ REQUIRED_CASE_IDS = %w[
   C11_ISOLATION_UNAVAILABLE
   C12_HANDOFF_INPUT_ISOLATION
   C13_POLICY_INTRODUCED_SAME_PR
+  C14_DURABLE_REVIEW_STATE
+  C15_PARTIAL_DECISION
+  C16_DECISION_ROUTING
+  C17_FINDING_CONTINUITY
+  C18_DECISION_SOURCE
+  C19_IMPLEMENTATION_REPORT_GATE
+  C20_HEAD_INVALIDATION
+  C21_RECOVERY_IDEMPOTENCE
+  C22_AUTHORIZATION_BOUNDARY
+  C23_LEGACY_COMPATIBILITY
 ].freeze
 
 DIMENSIONS = %w[
@@ -96,6 +119,21 @@ def validate_isolation(value, label)
   end
 end
 
+def validate_storage(value, repository, pr, marker, label)
+  fail_contract("#{label} must be a mapping") unless value.is_a?(Hash)
+  fail_contract("#{label}.provider must be github_pr_comment") unless value["provider"] == "github_pr_comment"
+  expected_discovery = "github-pr-comments://#{repository}/pull/#{pr}"
+  fail_contract("#{label}.discovery_ref must be #{expected_discovery.inspect}") unless value["discovery_ref"] == expected_discovery
+  fail_contract("#{label}.marker must be #{marker.inspect}") unless value["marker"] == marker
+end
+
+def decision_scope_ids(round)
+  continuity = round["finding_continuity"]
+  return round.dig("fresh_review", "finding_ids") unless continuity.is_a?(Hash)
+
+  continuity["decision_scope_finding_ids"]
+end
+
 def load_handoff_template(path)
   text = File.read(path)
   match = text.match(/\A---\n(.*?)\n---\n/m)
@@ -147,7 +185,7 @@ def round_transition_errors(previous, current)
   errors << "previous_review_head must equal prior current_review_head" unless current["previous_review_head"] == previous["current_review_head"]
   errors << "prior_round_ref must equal prior record_ref" unless current.dig("remediation_verification", "prior_round_ref") == previous["record_ref"]
 
-  prior_ids = previous.dig("fresh_review", "finding_ids")
+  prior_ids = decision_scope_ids(previous)
   results = current.dig("remediation_verification", "results")
 
   unless prior_ids.is_a?(Array)
@@ -181,7 +219,11 @@ def validate_round_record(round, label)
   require_nonempty_string(round["record_ref"], "#{label}.record_ref")
   require_nonempty_string(round["repository"], "#{label}.repository")
   fail_contract("#{label}: pr must be a positive integer") unless round["pr"].is_a?(Integer) && round["pr"] > 0
+  fail_contract("#{label}: review_stage invalid") unless VALID_REVIEW_STAGE.include?(round["review_stage"])
   fail_contract("#{label}: round must be a positive integer") unless round["round"].is_a?(Integer) && round["round"] > 0
+  validate_storage(round["storage"], round["repository"], round["pr"], ROUND_RECORD_MARKER, "#{label}.storage")
+  expected_ref_prefix = "hrb://github/#{round["repository"]}/pull/#{round["pr"]}/review-round/"
+  fail_contract("#{label}: record_ref must use the durable hrb://github PR namespace") unless round["record_ref"].start_with?(expected_ref_prefix)
 
   %w[base_sha current_review_head].each do |key|
     value = round[key]
@@ -219,6 +261,32 @@ def validate_round_record(round, label)
   has_finding_coverage = coverage.value?("reviewed_with_findings")
   fail_contract("#{label}: Finding IDs and coverage manifest contradict each other") unless has_finding_ids == has_finding_coverage
 
+  continuity = round["finding_continuity"]
+  fail_contract("#{label}: missing finding_continuity") unless continuity.is_a?(Hash)
+  inherited = continuity["inherited"]
+  fail_contract("#{label}: finding_continuity.inherited must be an array") unless inherited.is_a?(Array)
+  inherited_ids = inherited.map { |item| item["finding_id"] }
+  fail_contract("#{label}: inherited Finding IDs must be unique") unless inherited_ids.uniq.length == inherited_ids.length
+  inherited.each_with_index do |item, index|
+    fail_contract("#{label}: inherited item #{index} must be a mapping") unless item.is_a?(Hash)
+    finding_id = item["finding_id"]
+    match = FINDING_ID_PATTERN.match(finding_id.to_s)
+    fail_contract("#{label}: inherited item #{index} has invalid Finding ID") unless match && match[1].to_i < round["round"]
+    require_nonempty_string(item["source_round_ref"], "#{label}.finding_continuity.inherited[#{index}].source_round_ref")
+    fail_contract("#{label}: inherited item #{index} has invalid remediation_status") unless VALID_REMEDIATION_STATUS.include?(item["remediation_status"])
+  end
+
+  decision_ids = continuity["decision_scope_finding_ids"]
+  fail_contract("#{label}: finding_continuity.decision_scope_finding_ids must be an array") unless decision_ids.is_a?(Array)
+  fail_contract("#{label}: decision-scope Finding IDs must be unique") unless decision_ids.uniq.length == decision_ids.length
+  decision_ids.each do |finding_id|
+    match = FINDING_ID_PATTERN.match(finding_id.to_s)
+    fail_contract("#{label}: invalid decision-scope Finding ID #{finding_id.inspect}") unless match && match[1].to_i <= round["round"]
+  end
+  expected_decision_ids = fresh["finding_ids"] + inherited_ids
+  fail_contract("#{label}: decision scope must exactly equal current Fresh plus inherited Finding IDs") unless decision_ids.sort == expected_decision_ids.sort
+  fail_contract("#{label}: round 1 cannot inherit prior Finding IDs") if round["round"] == 1 && !inherited.empty?
+
   if round["round"] >= 2
     remediation = round["remediation_verification"]
     fail_contract("#{label}: round 2+ requires remediation_verification") unless remediation.is_a?(Hash)
@@ -232,10 +300,16 @@ def validate_round_record(round, label)
       prior_finding_id = result["prior_finding_id"]
       require_nonempty_string(prior_finding_id, "#{label}.remediation result #{index}.prior_finding_id")
       match = FINDING_ID_PATTERN.match(prior_finding_id)
-      expected_prior_round = round["round"] - 1
-      fail_contract("#{label}: remediation result #{index} must reference a prior-round Finding ID") unless match && match[1].to_i == expected_prior_round
+      fail_contract("#{label}: remediation result #{index} must reference an earlier-round Finding ID") unless match && match[1].to_i < round["round"]
       fail_contract("#{label}: remediation result #{index} invalid status") unless VALID_REMEDIATION_STATUS.include?(result["status"])
       require_nonempty_string(result["evidence_ref"], "#{label}.remediation result #{index}.evidence_ref")
+    end
+
+    result_by_id = results.to_h { |result| [result["prior_finding_id"], result] }
+    inherited.each_with_index do |item, index|
+      result = result_by_id[item["finding_id"]]
+      fail_contract("#{label}: inherited item #{index} is not present in remediation results") unless result
+      fail_contract("#{label}: inherited item #{index} remediation status drifted") unless result["status"] == item["remediation_status"]
     end
   end
 
