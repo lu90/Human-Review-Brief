@@ -1328,6 +1328,47 @@ missing_payload_comments = payload_comments.reject { |comment| comment["body"].i
 missing_payload_errors = resolve_round_payloads(round2, missing_payload_comments)
 fail_contract("negative payload recovery check: missing Raw Findings payload was accepted") if missing_payload_errors.empty?
 
+raw_ref = round2.dig("fresh_review", "raw_findings_ref")
+raw_payload, raw_lookup_errors = recover_record_by_ref(
+  payload_comments,
+  RAW_FINDINGS_MARKER,
+  "hrb-review-payload",
+  raw_ref
+)
+fail_contract("raw payload fixture lookup failed: #{raw_lookup_errors.join("; ")}") unless raw_lookup_errors.empty?
+
+null_raw_payload = deep_copy(raw_payload)
+null_raw_payload["content"] = nil
+null_raw_comments = payload_comments.map do |comment|
+  comment["body"].include?(raw_ref) ? render_yaml_comment(RAW_FINDINGS_MARKER, null_raw_payload) : comment
+end
+null_raw_errors = resolve_round_payloads(round2, null_raw_comments)
+fail_contract("negative payload content check: content:null was accepted") unless null_raw_errors.any? { |error| error.include?("non-null mapping") }
+
+omitted_raw_payload = deep_copy(raw_payload)
+omitted_raw_payload["content"]["findings"].pop
+omitted_raw_comments = payload_comments.map do |comment|
+  comment["body"].include?(raw_ref) ? render_yaml_comment(RAW_FINDINGS_MARKER, omitted_raw_payload) : comment
+end
+omitted_raw_errors = resolve_round_payloads(round2, omitted_raw_comments)
+fail_contract("negative payload content check: missing Raw Finding ID was accepted") unless omitted_raw_errors.any? { |error| error.include?("exactly match") }
+
+brief_ref = round2.dig("brief", "brief_ref")
+brief_payload, brief_lookup_errors = recover_record_by_ref(
+  payload_comments,
+  HUMAN_REVIEW_BRIEF_MARKER,
+  "hrb-review-payload",
+  brief_ref
+)
+fail_contract("brief payload fixture lookup failed: #{brief_lookup_errors.join("; ")}") unless brief_lookup_errors.empty?
+empty_brief_payload = deep_copy(brief_payload)
+empty_brief_payload["content"]["markdown"] = "   "
+empty_brief_comments = payload_comments.map do |comment|
+  comment["body"].include?(brief_ref) ? render_yaml_comment(HUMAN_REVIEW_BRIEF_MARKER, empty_brief_payload) : comment
+end
+empty_brief_errors = resolve_round_payloads(round2, empty_brief_comments)
+fail_contract("negative payload content check: empty Human Review Brief was accepted") unless empty_brief_errors.any? { |error| error.include?("markdown must be non-empty") }
+
 # Exercise actual Round Record comment parsing.
 round_comment = render_yaml_comment(ROUND_RECORD_MARKER, round2)
 recovered_round, recovered_round_errors = recover_record_by_ref(
@@ -1350,6 +1391,21 @@ decision_comments = [
 ]
 effective_decision, recovery_errors = recover_effective_decision(decision_comments, round2)
 fail_contract("effective decision recovery failed: #{recovery_errors.join("; ")}") unless recovery_errors.empty? && effective_decision == decision
+
+cycle_a = deep_copy(decision)
+cycle_b = deep_copy(decision)
+cycle_a["record_ref"] = "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-10@3333333333333333333333333333333333333333"
+cycle_a["revision"] = 10
+cycle_a["supersedes_ref"] = "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-11@3333333333333333333333333333333333333333"
+cycle_b["record_ref"] = cycle_a["supersedes_ref"]
+cycle_b["revision"] = 11
+cycle_b["supersedes_ref"] = cycle_a["record_ref"]
+cycle_comments = decision_comments + [
+  render_yaml_comment(DECISION_RECORD_MARKER, cycle_a),
+  render_yaml_comment(DECISION_RECORD_MARKER, cycle_b)
+]
+_cycle_effective, cycle_errors = recover_effective_decision(cycle_comments, round2)
+fail_contract("negative revision recovery check: hidden supersession cycle was ignored") unless cycle_errors.any? { |error| error.include?("cycle detected") }
 
 fail_contract("partial decision must route to human_review") unless decision_route(partial_decision, round2) == "human_review"
 fail_contract("complete decision example must route to implementation_remediation") unless decision_route(decision, round2) == "implementation_remediation"
@@ -1382,7 +1438,7 @@ advanced_head = "4444444444444444444444444444444444444444"
 fail_contract("old-head decision incorrectly approved advanced head") unless gate_route_for_head(decision, round2, advanced_head) == "blocked"
 
 remediation_progress = {
-  "artifact" => "implementation-progress",
+  "artifact" => "delivery-progress",
   "repository" => round2["repository"],
   "pr" => round2["pr"],
   "source_decision_ref" => decision["record_ref"],
@@ -1417,7 +1473,7 @@ bad_route, bad_route_errors = continuation_route(
 fail_contract("negative continuation check: mismatched source decision was accepted") unless bad_route == "blocked" && !bad_route_errors.empty?
 
 spec_progress = {
-  "artifact" => "implementation-progress",
+  "artifact" => "delivery-progress",
   "repository" => spec_round["repository"],
   "pr" => spec_round["pr"],
   "source_decision_ref" => spec_approve["record_ref"],
@@ -1440,6 +1496,69 @@ spec_continuation, spec_continuation_errors = continuation_route(
   spec_progress
 )
 fail_contract("valid Spec-approved implementation continuation failed: #{spec_continuation_errors.join("; ")}") unless spec_continuation == "tickets_or_implementation" && spec_continuation_errors.empty?
+
+ready_final_progress = deep_copy(remediation_progress)
+ready_final_progress["status"] = "ready_for_final_hrb"
+ready_final_progress["completed_slices"] = %w[R2-RF-01 R2-RF-02]
+ready_final_progress["pending_slices"] = []
+ready_final_route, ready_final_errors = continuation_route(
+  decision,
+  round2,
+  advanced_head,
+  [[decision["review_head"], advanced_head]],
+  ready_final_progress
+)
+fail_contract("ready_for_final_hrb did not resume at Final HRB: #{ready_final_errors.join("; ")}") unless ready_final_route == "final_hrb" && ready_final_errors.empty?
+
+spec_loop_progress = {
+  "artifact" => "delivery-progress",
+  "repository" => round2["repository"],
+  "pr" => round2["pr"],
+  "source_decision_ref" => spec_change["record_ref"],
+  "route" => "spec_loop",
+  "start_head" => spec_change["review_head"],
+  "current_head" => advanced_head,
+  "status" => "in_progress",
+  "scope" => {
+    "finding_ids" => ["R2-RF-01"],
+    "source_spec_ref" => "docs/spec.md@#{spec_change["review_head"]}",
+    "change_scope_unchanged" => true
+  },
+  "completed_slices" => ["revise-requirement"],
+  "pending_slices" => ["update-acceptance-criteria"]
+}
+spec_loop_route, spec_loop_errors = continuation_route(
+  spec_change,
+  round2,
+  advanced_head,
+  [[spec_change["review_head"], advanced_head]],
+  spec_loop_progress
+)
+fail_contract("valid Spec Loop continuation failed: #{spec_loop_errors.join("; ")}") unless spec_loop_route == "spec_loop" && spec_loop_errors.empty?
+
+ready_spec_progress = deep_copy(spec_loop_progress)
+ready_spec_progress["status"] = "ready_for_spec_hrb"
+ready_spec_progress["completed_slices"] = ["revise-requirement", "update-acceptance-criteria"]
+ready_spec_progress["pending_slices"] = []
+ready_spec_route, ready_spec_errors = continuation_route(
+  spec_change,
+  round2,
+  advanced_head,
+  [[spec_change["review_head"], advanced_head]],
+  ready_spec_progress
+)
+fail_contract("ready_for_spec_hrb did not resume at Spec HRB: #{ready_spec_errors.join("; ")}") unless ready_spec_route == "spec_hrb" && ready_spec_errors.empty?
+
+wrong_ready_state = deep_copy(spec_loop_progress)
+wrong_ready_state["status"] = "ready_for_final_hrb"
+wrong_ready_route, wrong_ready_errors = continuation_route(
+  spec_change,
+  round2,
+  advanced_head,
+  [[spec_change["review_head"], advanced_head]],
+  wrong_ready_state
+)
+fail_contract("negative progress-state check: Spec Loop accepted ready_for_final_hrb") unless wrong_ready_route == "blocked" && !wrong_ready_errors.empty?
 
 # Exercise valid zero-finding lineage without replacing the canonical non-empty transition.
 zero_previous = deep_copy(round1)
