@@ -1133,6 +1133,9 @@ require_path(c14, "C14", %w[expected persistence discovery_ref], "github-pr-comm
 require_path(c14, "C14", %w[expected persistence stable_record_ref_required], true)
 require_path(c14, "C14", %w[expected persistence read_back_required], true)
 require_path(c14, "C14", %w[expected persistence referenced_payloads_must_resolve], true)
+require_path(c14, "C14", %w[expected persistence payload_content_must_be_non_null], true)
+require_path(c14, "C14", %w[expected persistence raw_finding_ids_must_match_round], true)
+require_path(c14, "C14", %w[expected persistence payload_type_minimum_body_validated], true)
 require_path(c14, "C14", %w[expected persistence review_head_unchanged], true)
 require_includes(c14["must_not"], "use artifact:// examples as proof of durable persistence", "C14.must_not")
 require_includes(c14["must_not"], "select effective state by comment timestamp alone", "C14.must_not")
@@ -1185,6 +1188,9 @@ c20 = by_id.fetch("C20_HEAD_INVALIDATION")
 require_path(c20, "C20", %w[expected decision valid_as_new_head_approval], false)
 require_path(c20, "C20", %w[expected decision gate_route], "blocked")
 require_path(c20, "C20", %w[expected decision continuation_route], "implementation_remediation")
+require_path(c20, "C20", %w[expected decision spec_loop_continuation_supported], true)
+require_path(c20, "C20", %w[expected decision ready_for_final_hrb_routes_to], "final_hrb")
+require_path(c20, "C20", %w[expected decision ready_for_spec_hrb_routes_to], "spec_hrb")
 require_path(c20, "C20", %w[expected decision continuation_requires_descendant_head], true)
 require_path(c20, "C20", %w[expected decision continuation_requires_durable_progress], true)
 require_path(c20, "C20", %w[expected decision continuation_requires_scope_match], true)
@@ -1196,6 +1202,8 @@ c21 = by_id.fetch("C21_RECOVERY_IDEMPOTENCE")
   actual_comment_parser_exercised
   payload_reference_resolution_exercised
   effective_decision_recovery_exercised
+  whole_scope_revision_graph_validated
+  hidden_cycle_rejected
   duplicate_record_write_avoided
   completed_step_not_repeated
   duplicate_external_write_avoided
