@@ -13,6 +13,7 @@ allowed_inputs:
   - previous_review_head
   - current_head_sha
   - prior_round_record
+  - prior_review_decision_record
   - prior_findings
   - remediation_delta
   - deterministic_verification_refs
@@ -41,6 +42,9 @@ Current head SHA: {{current_head_sha}}
 Prior Review Round Record:
 {{prior_round_record}}
 
+Prior Review Decision Record, when available:
+{{prior_review_decision_record}}
+
 Prior findings and evidence chains:
 {{prior_findings}}
 
@@ -55,7 +59,7 @@ Active base-SHA review policy, when present:
 
 ## Review contract
 
-Verify only whether each prior finding was actually addressed by the previous-review-head-to-current-head delta.
+Verify only whether each prior finding was actually addressed by the previous-review-head-to-current-head delta. You may use the prior Review Decision Record only to understand the Owner's applicable remediation constraints and disposition history. Machine remediation status and Owner disposition are separate facts; do not silently rewrite the Owner's decision.
 
 For each prior finding return exactly one status using that finding's original ID unchanged:
 
