@@ -35,6 +35,12 @@ VALID_FINDING_DISPOSITION = %w[
   spec_change_required
   unresolved
 ].freeze
+VALID_PROGRESS_STATUS = %w[
+  in_progress
+  verifying
+  ready_for_final_hrb
+  ready_for_spec_hrb
+].freeze
 ROUND_RECORD_MARKER = "hrb-review-round-record:v1"
 DECISION_RECORD_MARKER = "hrb-review-decision-record:v1"
 RAW_FINDINGS_MARKER = "hrb-raw-findings:v1"
@@ -203,14 +209,63 @@ def resolve_payload(comments, marker, payload_type, record_ref, round)
   errors << "payload PR mismatch for #{record_ref}" unless payload["pr"] == round["pr"]
   errors << "payload round mismatch for #{record_ref}" unless payload["review_round_ref"] == round["record_ref"]
   errors << "payload head mismatch for #{record_ref}" unless payload["review_head"] == round["current_review_head"]
-  errors << "payload content missing for #{record_ref}" unless payload.key?("content")
   [payload, errors]
+end
+
+def nonempty_string_array?(value)
+  value.is_a?(Array) && !value.empty? && value.all? { |item| item.is_a?(String) && !item.empty? }
+end
+
+def payload_content_errors(payload, payload_type, round, remediation_result = nil)
+  errors = []
+  content = payload && payload["content"]
+  unless content.is_a?(Hash)
+    errors << "#{payload_type} payload content must be a non-null mapping"
+    return errors
+  end
+
+  case payload_type
+  when "raw_findings"
+    findings = content["findings"]
+    unless findings.is_a?(Array)
+      errors << "raw_findings content.findings must be an array"
+      return errors
+    end
+
+    ids = findings.map { |item| item.is_a?(Hash) ? item["finding_id"] : nil }
+    expected_ids = round.dig("fresh_review", "finding_ids")
+    errors << "raw_findings Finding IDs must exactly match Review Round fresh_review.finding_ids" unless ids == expected_ids
+    findings.each_with_index do |item, index|
+      unless item.is_a?(Hash)
+        errors << "raw_findings finding #{index} must be a mapping"
+        next
+      end
+      claim = item["claim"]
+      errors << "raw_findings finding #{index}.claim must be non-empty" unless claim.is_a?(String) && !claim.empty?
+      errors << "raw_findings finding #{index}.evidence must be a non-empty string array" unless nonempty_string_array?(item["evidence"])
+    end
+  when "human_review_brief"
+    markdown = content["markdown"]
+    errors << "human_review_brief content.markdown must be non-empty" unless markdown.is_a?(String) && !markdown.strip.empty?
+  when "remediation_evidence"
+    unless remediation_result.is_a?(Hash)
+      errors << "remediation_evidence requires the referenced remediation result"
+      return errors
+    end
+    errors << "remediation_evidence prior_finding_id mismatch" unless content["prior_finding_id"] == remediation_result["prior_finding_id"]
+    errors << "remediation_evidence status mismatch" unless content["status"] == remediation_result["status"]
+    errors << "remediation_evidence evidence must be a non-empty string array" unless nonempty_string_array?(content["evidence"])
+  else
+    errors << "unsupported payload_type #{payload_type.inspect}"
+  end
+
+  errors
 end
 
 def resolve_round_payloads(round, comments)
   errors = []
 
-  _raw, raw_errors = resolve_payload(
+  raw, raw_errors = resolve_payload(
     comments,
     RAW_FINDINGS_MARKER,
     "raw_findings",
@@ -218,8 +273,9 @@ def resolve_round_payloads(round, comments)
     round
   )
   errors.concat(raw_errors)
+  errors.concat(payload_content_errors(raw, "raw_findings", round)) if raw
 
-  _brief, brief_errors = resolve_payload(
+  brief, brief_errors = resolve_payload(
     comments,
     HUMAN_REVIEW_BRIEF_MARKER,
     "human_review_brief",
@@ -227,11 +283,12 @@ def resolve_round_payloads(round, comments)
     round
   )
   errors.concat(brief_errors)
+  errors.concat(payload_content_errors(brief, "human_review_brief", round)) if brief
 
   remediation = round["remediation_verification"]
   if remediation.is_a?(Hash)
     remediation.fetch("results", []).each do |result|
-      _evidence, evidence_errors = resolve_payload(
+      evidence, evidence_errors = resolve_payload(
         comments,
         REMEDIATION_EVIDENCE_MARKER,
         "remediation_evidence",
@@ -239,6 +296,7 @@ def resolve_round_payloads(round, comments)
         round
       )
       errors.concat(evidence_errors)
+      errors.concat(payload_content_errors(evidence, "remediation_evidence", round, result)) if evidence
     end
   end
 
