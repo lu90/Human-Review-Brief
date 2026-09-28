@@ -412,7 +412,7 @@ cases:
     expected:
       decision:
         valid_for_current_head: false
-        route: human_review
+        route: blocked
     must_not:
       - inherit old-head approval onto a new head
       - skip the applicable fresh review after a material head change
