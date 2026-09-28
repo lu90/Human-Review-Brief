@@ -315,6 +315,9 @@ cases:
         stable_record_ref_required: true
         read_back_required: true
         referenced_payloads_must_resolve: true
+        payload_content_must_be_non_null: true
+        raw_finding_ids_must_match_round: true
+        payload_type_minimum_body_validated: true
         review_head_unchanged: true
     must_not:
       - use artifact:// examples as proof of durable persistence
@@ -425,12 +428,17 @@ cases:
         valid_as_new_head_approval: false
         gate_route: blocked
         continuation_route: implementation_remediation
+        spec_loop_continuation_supported: true
+        ready_for_final_hrb_routes_to: final_hrb
+        ready_for_spec_hrb_routes_to: spec_hrb
         continuation_requires_descendant_head: true
         continuation_requires_durable_progress: true
         continuation_requires_scope_match: true
     must_not:
       - inherit old-head approval onto a new head
       - block valid in-progress remediation solely because its head advanced
+      - block valid in-progress Spec Loop solely because its head advanced
+      - reject ready_for_final_hrb after implementation verification is complete
       - skip the applicable fresh review before approving or closing the new head
 
   - id: C21_RECOVERY_IDEMPOTENCE
@@ -446,6 +454,8 @@ cases:
         actual_comment_parser_exercised: true
         payload_reference_resolution_exercised: true
         effective_decision_recovery_exercised: true
+        whole_scope_revision_graph_validated: true
+        hidden_cycle_rejected: true
         duplicate_record_write_avoided: true
         completed_step_not_repeated: true
         duplicate_external_write_avoided: true
