@@ -759,27 +759,47 @@ def continuation_errors(decision, round, current_head, descendant_pairs, progres
 
   reviewed_head = decision["review_head"]
   route = decision_route(decision, round)
-  allowed_routes = %w[tickets_or_implementation implementation_remediation]
+  allowed_routes = %w[tickets_or_implementation implementation_remediation spec_loop]
   errors << "decision route is not resumable work" unless allowed_routes.include?(route)
 
   descendant = descendant_pairs.include?([reviewed_head, current_head])
   errors << "current head is not a proven descendant of reviewed head" unless descendant
 
   unless progress.is_a?(Hash)
-    errors << "durable implementation progress is missing"
+    errors << "durable delivery progress is missing"
     return errors
   end
 
-  errors << "progress artifact must be implementation-progress" unless progress["artifact"] == "implementation-progress"
+  errors << "progress artifact must be delivery-progress" unless progress["artifact"] == "delivery-progress"
   errors << "progress repository mismatch" unless progress["repository"] == round["repository"]
   errors << "progress PR mismatch" unless progress["pr"] == round["pr"]
   errors << "progress source_decision_ref mismatch" unless progress["source_decision_ref"] == decision["record_ref"]
   errors << "progress route mismatch" unless progress["route"] == route
   errors << "progress start_head mismatch" unless progress["start_head"] == reviewed_head
   errors << "progress current_head mismatch" unless progress["current_head"] == current_head
-  errors << "progress status must be in_progress or verifying" unless %w[in_progress verifying].include?(progress["status"])
+
+  status = progress["status"]
+  errors << "progress status invalid" unless VALID_PROGRESS_STATUS.include?(status)
+  if status == "ready_for_final_hrb" && !%w[tickets_or_implementation implementation_remediation].include?(route)
+    errors << "ready_for_final_hrb is only valid for implementation routes"
+  end
+  if status == "ready_for_spec_hrb" && route != "spec_loop"
+    errors << "ready_for_spec_hrb is only valid for spec_loop"
+  end
+  if route == "spec_loop" && status == "ready_for_final_hrb"
+    errors << "spec_loop cannot be ready_for_final_hrb"
+  end
+  if route != "spec_loop" && status == "ready_for_spec_hrb"
+    errors << "implementation routes cannot be ready_for_spec_hrb"
+  end
+
   errors << "progress completed_slices must be an array" unless progress["completed_slices"].is_a?(Array)
   errors << "progress pending_slices must be an array" unless progress["pending_slices"].is_a?(Array)
+  if %w[ready_for_final_hrb ready_for_spec_hrb].include?(status) &&
+     progress["pending_slices"].is_a?(Array) &&
+     !progress["pending_slices"].empty?
+    errors << "ready progress must have no pending_slices"
+  end
 
   scope = progress["scope"]
   unless scope.is_a?(Hash)
@@ -800,6 +820,18 @@ def continuation_errors(decision, round, current_head, descendant_pairs, progres
     approved_spec_ref = scope["approved_spec_ref"]
     errors << "implementation progress requires approved_spec_ref" unless approved_spec_ref.is_a?(String) && !approved_spec_ref.empty?
     errors << "governing scope changed since Spec approval" unless scope["governing_scope_unchanged"] == true
+  elsif route == "spec_loop"
+    spec_change_ids = decision.fetch("findings", [])
+      .select { |item| item["disposition"] == "spec_change_required" }
+      .map { |item| item["finding_id"] }
+    progress_ids = scope["finding_ids"]
+    errors << "spec-loop progress finding_ids must be an array" unless progress_ids.is_a?(Array)
+    if progress_ids.is_a?(Array)
+      errors << "spec-loop progress scope must exactly match Owner spec_change_required findings" unless progress_ids.sort == spec_change_ids.sort
+    end
+    source_spec_ref = scope["source_spec_ref"]
+    errors << "spec-loop progress requires source_spec_ref" unless source_spec_ref.is_a?(String) && !source_spec_ref.empty?
+    errors << "spec-loop change scope drifted beyond Owner decision" unless scope["change_scope_unchanged"] == true
   end
 
   errors
@@ -809,7 +841,15 @@ def continuation_route(decision, round, current_head, descendant_pairs, progress
   errors = continuation_errors(decision, round, current_head, descendant_pairs, progress)
   return ["blocked", errors] unless errors.empty?
 
-  [decision_route(decision, round), []]
+  route = decision_route(decision, round)
+  case progress["status"]
+  when "ready_for_final_hrb"
+    ["final_hrb", []]
+  when "ready_for_spec_hrb"
+    ["spec_hrb", []]
+  else
+    [route, []]
+  end
 end
 
 def recover_effective_decision(comments, round)
@@ -824,9 +864,49 @@ def recover_effective_decision(comments, round)
     record_errors = decision_record_errors(record, round)
     errors.concat(record_errors.map { |message| "#{record["record_ref"]}: #{message}" })
   end
+
+  refs = scoped.map { |record| record["record_ref"] }
+  duplicate_refs = refs.group_by(&:itself).select { |_ref, values| values.length > 1 }.keys
+  errors << "duplicate decision record_ref values: #{duplicate_refs.join(", ")}" unless duplicate_refs.empty?
+
+  revisions = scoped.map { |record| record["revision"] }
+  duplicate_revisions = revisions.group_by(&:itself).select { |_revision, values| values.length > 1 }.keys
+  errors << "duplicate decision revisions: #{duplicate_revisions.join(", ")}" unless duplicate_revisions.empty?
+
+  refs_by_id = scoped.to_h { |record| [record["record_ref"], record] }
+
+  scoped.each do |record|
+    next if record["revision"] == 1
+
+    predecessor = refs_by_id[record["supersedes_ref"]]
+    unless predecessor
+      errors << "#{record["record_ref"]}: decision supersession predecessor missing"
+      next
+    end
+    revision_errors = decision_revision_errors(predecessor, record)
+    errors.concat(revision_errors.map { |message| "#{record["record_ref"]}: #{message}" })
+  end
+
+  # Validate the entire scope graph before selecting an effective record.
+  states = {}
+  visit = lambda do |record|
+    ref = record["record_ref"]
+    return if states[ref] == :done
+    if states[ref] == :visiting
+      errors << "decision supersession cycle detected at #{ref}"
+      return
+    end
+
+    states[ref] = :visiting
+    predecessor_ref = record["supersedes_ref"]
+    predecessor = predecessor_ref && refs_by_id[predecessor_ref]
+    visit.call(predecessor) if predecessor
+    states[ref] = :done
+  end
+  scoped.each { |record| visit.call(record) }
+
   return [nil, errors] unless errors.empty?
 
-  refs = scoped.to_h { |record| [record["record_ref"], record] }
   superseded_refs = scoped.map { |record| record["supersedes_ref"] }.compact
   effective = scoped.reject { |record| superseded_refs.include?(record["record_ref"]) }
 
@@ -835,27 +915,7 @@ def recover_effective_decision(comments, round)
     return [nil, errors]
   end
 
-  cursor = effective.first
-  seen = {}
-  while cursor["revision"] > 1
-    if seen[cursor["record_ref"]]
-      errors << "decision supersession cycle detected"
-      break
-    end
-    seen[cursor["record_ref"]] = true
-
-    previous = refs[cursor["supersedes_ref"]]
-    unless previous
-      errors << "decision supersession predecessor missing"
-      break
-    end
-
-    revision_errors = decision_revision_errors(previous, cursor)
-    errors.concat(revision_errors)
-    cursor = previous
-  end
-
-  [errors.empty? ? effective.first : nil, errors]
+  [effective.first, []]
 end
 
 def legacy_round_readable?(round)
