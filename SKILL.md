@@ -44,9 +44,20 @@ Resolve and record:
 - originating spec / issue / ticket when available;
 - relevant CI / test evidence;
 - review round number;
+- review stage: `spec_review` or `final_review`;
 - previous review head and prior Review Round Record reference for round 2+; for round 1 use `previous_review_head: null` and `remediation_verification: null`.
 
 Fail early if the fixed point is invalid or the change set cannot be identified.
+
+### Final-review Implementation Report gate
+
+This gate applies only to `final_review`. It does not apply to `spec_review`.
+
+Before pinning the Final HRB head, the Orchestrator MUST locate the target repository's repo-approved durable Implementation Report or equivalent delivery artifact and verify that it applies to the implementation being reviewed. It must cover the current implementation changes, affected verification results, code-review remediation status, refactor characterization/regression evidence when applicable, known deviations/risks/deferred work, and user-visible behavior changes.
+
+If the report is missing or stale, stop and return to report generation/update. If the report itself belongs in the PR, commit/update it before fixing the Final HRB head so the report is inside the reviewed base→head scope. Do not create a separate implementation-report skill.
+
+The complete Implementation Report is available to the Orchestrator and Brief Compiler. It is NOT a Fresh Reviewer input. The Orchestrator may extract current factual spec/code/verification evidence from it, but MUST remove prior findings, prior Human Review Brief conclusions, Owner decisions, remediation conclusions, author rationale, and similar review history before constructing the Fresh Reviewer handoff.
 
 ## Step 2 — Build bounded repository context
 
@@ -126,6 +137,8 @@ Give the reviewer a bounded review package:
 - deterministic verification evidence;
 - active base-SHA `.hrb/REVIEW_POLICY.md` when present;
 - relevant standards and architecture contracts as evidence/context.
+
+The Orchestrator MUST inspect indirect inputs such as PR descriptions and Implementation Reports for prior review conclusions or human decisions before building the Fresh Reviewer package. Do not pass the full Implementation Report to Fresh Review. Current authoritative specs and factual current-state verification remain allowed.
 
 For the fresh full review, do not provide or expose prior-round findings or remediation conclusions at all. They MUST NOT be visible in the fresh Reviewer context.
 
@@ -265,6 +278,7 @@ Then start a separate Reviewer context in **Remediation Review mode** using `han
 - previous review head;
 - current review head;
 - prior Review Round Record;
+- the prior Review Decision Record when available, limited to applicable Owner dispositions and remediation constraints;
 - prior findings and their evidence chains;
 - the actual previous-head→current-head delta.
 
@@ -282,7 +296,7 @@ The Orchestrator records Remediation Review mode isolation status/method after t
 
 A round-2+ brief MUST receive this metadata together with remediation results.
 
-After remediation returns, deterministically verify that its prior Finding IDs exactly equal the prior Review Round Record's Finding ID set: no omissions, no duplicates, and no current-round Fresh Finding IDs.
+After remediation returns, deterministically verify its prior Finding IDs. For current durable records, they MUST exactly cover the prior Review Round Record's `finding_continuity.decision_scope_finding_ids`: no omissions, no duplicates, no unknown/chain-external IDs, and no current-round Fresh Finding IDs. Legacy records without `finding_continuity` may still be read, but they cannot by themselves establish routable human approval.
 
 Do not use remediation review as a substitute for the fresh full review.
 
@@ -298,7 +312,8 @@ Give the Brief Compiler:
 - remediation-verification results and Remediation Review mode isolation status/method when this is round 2+;
 - evidence chains and primary anchors;
 - deterministic CI / test evidence;
-- relevant spec or ticket references.
+- relevant spec or ticket references;
+- for `final_review`, the current applicable Implementation Report.
 
 Do not give it the implementation conversation as trusted rationale.
 
@@ -393,19 +408,133 @@ Do not regenerate the entire brief.
 
 ## Review Round Record
 
-After each completed review round, the Orchestrator MUST emit a Review Round Record using the canonical contracts in `fixtures/hrb-0/review-round-record-round1.example.yaml` and `fixtures/hrb-0/review-round-record.example.yaml`.
+After each completed machine review round, the Orchestrator MUST emit a Review Round Record using the canonical contracts in `fixtures/hrb-0/review-round-record-round1.example.yaml` and `fixtures/hrb-0/review-round-record.example.yaml`. This happens before the Owner has to finish the human decision.
 
-Every Review Round Record MUST have a stable `record_ref` identifying that record.
+Every current Review Round Record MUST record:
 
-Round 1 MUST encode `previous_review_head: null` and `remediation_verification: null`. Round 2+ MUST record the previous review head and prior Review Round Record reference, and that `prior_round_ref` MUST equal the prior record's `record_ref`.
+- a stable `record_ref`;
+- repository, PR, review stage, base, current review head, round, and previous review head when applicable;
+- Fresh Review findings, coverage, and isolation metadata;
+- remediation evidence for round 2+;
+- Brief Compiler metadata and brief reference;
+- `finding_continuity.inherited` for prior IDs still carried into this human review surface;
+- `finding_continuity.decision_scope_finding_ids`, the exact set that requires an Owner disposition in this round;
+- the durable storage locator.
 
-Every record MUST also store the complete set of Finding IDs emitted by that round under the fresh-review metadata. The Orchestrator MUST validate Finding ID format, round prefix, sequence, and uniqueness before recording the round.
+Finding IDs remain immutable. Fresh IDs use the current round prefix. Inherited IDs preserve their original IDs and MUST reference a prior Review Round Record in the valid lineage. Reject unknown, chain-external, duplicate, or omitted required IDs. A round with no new Fresh Findings can still carry unresolved prior IDs.
 
-The Finding ID set and Review Coverage Manifest MUST be minimally consistent: zero Finding IDs requires every dimension to be `reviewed_no_finding`; one or more Finding IDs requires at least one dimension to be `reviewed_with_findings`. HRB-0 does not require a per-dimension Finding-ID mapping.
+Machine remediation state and Owner disposition are separate facts:
 
-The record is factual metadata for later orchestration. Do not treat prior findings in the record as authority during a fresh independent review.
+```text
+machine: was the prior finding fixed?
+owner: is the resulting state acceptable, deferred, still requiring remediation, or a spec change?
+```
 
-Do not commit the generated record into the PR under review during the same round if doing so would change the head SHA.
+Do not silently rewrite an Owner disposition because machine remediation still reports a problem. New evidence that requires a new human judgment must be surfaced explicitly.
+
+The Finding ID set and Review Coverage Manifest MUST be minimally consistent: zero Fresh Finding IDs requires every dimension to be `reviewed_no_finding`; one or more Fresh Finding IDs requires at least one dimension to be `reviewed_with_findings`.
+
+The Review Round Record is factual machine-review metadata. It never stores or implies final Owner approval.
+
+### Durable PR-comment storage
+
+For PR-centered HRB, the canonical durable state mechanism is a GitHub PR comment. Do not use an `artifact://` example as proof of persistence.
+
+Use these markers:
+
+```text
+<!-- hrb-review-round-record:v1 -->
+<!-- hrb-review-decision-record:v1 -->
+```
+
+Store the complete machine-readable YAML record in the marked PR comment. Each record also carries:
+
+- `storage.provider: github_pr_comment`;
+- `storage.discovery_ref: github-pr-comments://OWNER/REPO/pull/NUMBER`;
+- the matching marker;
+- an `hrb://github/...` stable `record_ref`.
+
+A fresh Orchestrator recovers state by listing the PR comments from `discovery_ref`, selecting only comments with the canonical marker, parsing the complete record, and validating repository/PR/head/lineage before use. The stable `record_ref`, not comment timestamp, identifies a record.
+
+Saving review metadata MUST NOT change the fixed PR head. Before writing, search for the same `record_ref`; if identical state already exists, reuse it rather than duplicating the write. After writing, read the comment back and validate it. If discovery, write, or read-back validation fails, do not advance.
+
+Creating or updating a PR comment is an external write and still requires whatever authorization the runtime/repository requires. Lack of write authorization is a persistence boundary: report it and do not claim durable workflow state.
+
+Legacy Review Round Records may be read for context, but a legacy record without a valid Review Decision Record MUST NOT be converted into historical approval.
+
+## Review Decision Record
+
+The Human Review Brief presents decisions. The **Review Decision Record** persists what the Owner actually decided. It does not replace Review Round Record evidence.
+
+Canonical examples:
+
+- `fixtures/hrb-0/review-decision-record-partial.example.yaml`;
+- `fixtures/hrb-0/review-decision-record.example.yaml`.
+
+A Review Decision Record MUST include:
+
+- `schema_version`, `artifact`, stable `record_ref`, and durable storage metadata;
+- repository, PR, `review_round_ref`, and exact `review_head`;
+- `stage`: `spec_review` or `final_review`;
+- monotonically increasing `revision` and explicit `supersedes_ref` for a later revision;
+- `completion`: `partial` or `complete`;
+- `overall_decision`: `approve`, `request_changes`, or `deep_review_incomplete`;
+- `spec_status`: `still_valid`, `change_required`, or `unresolved`;
+- the exact `required_finding_ids`;
+- per-finding Owner dispositions and optional remediation constraints;
+- durable decision-source entries that distinguish `decided_by` from `recorded_by` and persist the human statement being relied on.
+
+Per-finding `disposition` is one of:
+
+```text
+accepted
+remediate
+deferred
+spec_change_required
+unresolved
+```
+
+`accepted` means no remediation is required for this delivery decision. `remediate` means the current approved implementation scope must be fixed. `deferred` requires an explicit reason and preserves any applicable tracking reference. `spec_change_required` means the governing requirement/spec must change. `unresolved` means the Owner has not decided; the Agent must not fill it in.
+
+An empty `remediation_constraints` list is valid. Do not invent constraints. Ordinary discussion, an Agent inference, or a label such as `created_by: human_review` is not approval. A clear human batch decision may cover an explicitly enumerated set of Finding IDs.
+
+Partial decisions may be saved immediately. They remain non-routable until all required findings are decided and the overall/spec state is internally consistent.
+
+### Decision source and revision rules
+
+The Agent may organize and record decisions but cannot make them. Every overall and finding decision must point to a persisted `decision_sources` entry with a non-empty captured human statement. If an external durable source exists it may also be referenced, but the record itself must contain enough explicit human wording to recover the decision without conversation context.
+
+A newer revision MUST point to the exact prior `record_ref` through `supersedes_ref`. Recovery follows this explicit chain; it MUST NOT guess the latest decision from timestamps. A fork, cycle, missing predecessor, or two unsuperseded complete decisions for the same scope blocks routing until reconciled.
+
+### Validate before routing
+
+Before emitting a next action, validate that the Decision Record:
+
+- is readable from the declared durable source;
+- belongs to the same repository/PR and references the exact current Review Round Record and head;
+- is the unique effective unsuperseded revision for this scope;
+- references only current Fresh IDs or valid inherited IDs from the recorded lineage;
+- covers every `required_finding_id` when `completion: complete`;
+- has no unresolved required finding when complete;
+- has valid human decision sources;
+- contains no contradiction between overall decision, spec status, and per-finding dispositions.
+
+Route only after that validation:
+
+| Valid state | Next action |
+|---|---|
+| missing/corrupt/contradictory/source-unverifiable record | block engineering progress and recover/clarify the decision |
+| partial, `deep_review_incomplete`, unresolved Spec, or required unresolved finding | continue Human Review |
+| `spec_review + approve + still_valid` | return to tickets / authorized implementation gate |
+| `final_review + approve + still_valid` | return `closeout`; closeout keeps its own Git/GitHub authorization gate |
+| `final_review + request_changes + still_valid` with explicit `remediate` findings | Implementation Remediation Loop |
+| `request_changes + change_required` or any required `spec_change_required` disposition | Spec Loop |
+
+A Spec Review that requires change returns to the Spec Loop; it never enters code remediation. If implementation defects and Spec changes coexist, settle the Spec path first. `approve` cannot coexist with `remediate`, `spec_change_required`, or `unresolved`. Explicitly deferred work does not automatically block approval, but it cannot hide an incomplete in-scope requirement.
+
+A new review head does not inherit an old-head approval automatically. Re-run the applicable gate under the existing invalidation rules. Automatic routing means the user does not need to name the next skill; it never grants a new external-write authorization.
+
+Do not commit generated Review Round or Review Decision records into the PR under review when that would mutate the fixed review head.
 
 ## Conformance examples
 
@@ -424,6 +553,9 @@ Stop and surface the issue instead of compressing it away when:
 - the implementation materially exceeds the spec;
 - independent specialist review was not completed or isolation limitations were not clearly disclosed;
 - an important claim has no traceable evidence;
+- a Final HRB lacks a current applicable Implementation Report;
+- durable review-state discovery, persistence, or read-back validation fails;
+- a Review Decision Record is missing, contradictory, forked, stale for the current head, or lacks recoverable human decision source;
 - the requested review scope has expanded enough that a new brief is warranted.
 
 ## Output rule
