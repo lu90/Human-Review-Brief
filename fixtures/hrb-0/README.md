@@ -38,5 +38,15 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
 - `C12_HANDOFF_INPUT_ISOLATION` — Fresh Reviewer handoffs are canonical, whitelist-only, and deny prior-review/implementation context.
 - `C13_POLICY_INTRODUCED_SAME_PR` — a review policy introduced by the current PR is evidence only and cannot authorize that same PR.
+- `C14_DURABLE_REVIEW_STATE` — Review Round/Decision state is discoverable through marked PR comments without moving the reviewed head.
+- `C15_PARTIAL_DECISION` — partial human decisions are recoverable but non-routable.
+- `C16_DECISION_ROUTING` — valid Spec/Final decisions route deterministically.
+- `C17_FINDING_CONTINUITY` — inherited Finding IDs remain linked across rounds even when Fresh Review finds nothing new.
+- `C18_DECISION_SOURCE` — Agent inference cannot substitute for an explicit recoverable human statement.
+- `C19_IMPLEMENTATION_REPORT_GATE` — Final HRB requires a current Implementation Report while Spec HRB does not.
+- `C20_HEAD_INVALIDATION` — old-head approval cannot route a new head.
+- `C21_RECOVERY_IDEMPOTENCE` — restart recovery avoids duplicate writes/actions.
+- `C22_AUTHORIZATION_BOUNDARY` — HRB approval does not grant merge/tracker/comment authorization.
+- `C23_LEGACY_COMPATIBILITY` — legacy Round Records remain readable but cannot synthesize missing human approval.
 
-The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+. The paired round examples exercise a non-empty remediation transition; deterministic self-checks also cover the valid empty transition plus missing-result and duplicate-result rejection.
+The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+, plus partial and complete Review Decision Record examples. Deterministic self-checks exercise non-empty and zero-finding transitions, decision revisions/routing, missing/duplicate/unknown Finding IDs, stale heads, contradictory decisions, and legacy fail-closed behavior.
