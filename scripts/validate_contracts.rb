@@ -319,6 +319,207 @@ def validate_round_record(round, label)
   require_nonempty_string(brief["brief_ref"], "#{label}.brief.brief_ref")
 end
 
+def decision_record_errors(decision, round)
+  errors = []
+  return ["decision record must be a mapping"] unless decision.is_a?(Hash)
+
+  errors << "schema_version must be 1" unless decision["schema_version"] == 1
+  errors << "artifact must be hrb-review-decision-record" unless decision["artifact"] == "hrb-review-decision-record"
+
+  repository = decision["repository"]
+  pr = decision["pr"]
+  record_ref = decision["record_ref"]
+  errors << "record_ref must be a non-empty string" unless record_ref.is_a?(String) && !record_ref.empty?
+  errors << "repository must match Review Round Record" unless repository == round["repository"]
+  errors << "PR must match Review Round Record" unless pr == round["pr"]
+
+  storage = decision["storage"]
+  unless storage.is_a?(Hash)
+    errors << "storage must be a mapping"
+  else
+    expected_discovery = "github-pr-comments://#{round["repository"]}/pull/#{round["pr"]}"
+    errors << "storage provider must be github_pr_comment" unless storage["provider"] == "github_pr_comment"
+    errors << "storage discovery_ref must match repository/PR" unless storage["discovery_ref"] == expected_discovery
+    errors << "storage marker must be #{DECISION_RECORD_MARKER}" unless storage["marker"] == DECISION_RECORD_MARKER
+  end
+
+  expected_ref_prefix = "hrb://github/#{round["repository"]}/pull/#{round["pr"]}/decision/"
+  errors << "record_ref must use the durable hrb://github decision namespace" unless record_ref.is_a?(String) && record_ref.start_with?(expected_ref_prefix)
+  errors << "review_round_ref must match current Review Round Record" unless decision["review_round_ref"] == round["record_ref"]
+  errors << "review_head must match current review head" unless decision["review_head"] == round["current_review_head"]
+  errors << "stage must match current review stage" unless decision["stage"] == round["review_stage"]
+  errors << "revision must be a positive integer" unless decision["revision"].is_a?(Integer) && decision["revision"] > 0
+  if decision["revision"] == 1
+    errors << "revision 1 supersedes_ref must be null" unless decision["supersedes_ref"].nil?
+  elsif !decision["supersedes_ref"].is_a?(String) || decision["supersedes_ref"].empty?
+    errors << "revision 2+ requires supersedes_ref"
+  end
+
+  completion = decision["completion"]
+  overall = decision["overall_decision"]
+  spec_status = decision["spec_status"]
+  errors << "invalid completion" unless VALID_DECISION_COMPLETION.include?(completion)
+  errors << "invalid overall_decision" unless VALID_OVERALL_DECISION.include?(overall)
+  errors << "invalid spec_status" unless VALID_SPEC_STATUS.include?(spec_status)
+
+  required_ids = decision["required_finding_ids"]
+  expected_ids = decision_scope_ids(round)
+  unless required_ids.is_a?(Array)
+    errors << "required_finding_ids must be an array"
+    required_ids = []
+  end
+  errors << "required_finding_ids must be unique" unless required_ids.uniq.length == required_ids.length
+  errors << "required_finding_ids must exactly match the Review Round decision scope" unless expected_ids.is_a?(Array) && required_ids.sort == expected_ids.sort
+
+  sources = decision["decision_sources"]
+  source_ids = []
+  unless sources.is_a?(Array) && !sources.empty?
+    errors << "decision_sources must be a non-empty array"
+  else
+    source_ids = sources.map { |source| source["source_id"] }
+    errors << "decision source IDs must be unique" unless source_ids.uniq.length == source_ids.length
+    sources.each_with_index do |source, index|
+      unless source.is_a?(Hash)
+        errors << "decision source #{index} must be a mapping"
+        next
+      end
+      %w[source_id decided_by recorded_by captured_statement].each do |key|
+        value = source[key]
+        errors << "decision source #{index}.#{key} must be a non-empty string" unless value.is_a?(String) && !value.empty?
+      end
+      errors << "decision source #{index}.source_kind must be human_statement" unless source["source_kind"] == "human_statement"
+    end
+  end
+
+  overall_sources = decision["overall_decision_source_ids"]
+  unless overall_sources.is_a?(Array) && !overall_sources.empty?
+    errors << "overall_decision_source_ids must be a non-empty array"
+  else
+    errors << "overall_decision_source_ids contains unknown source" unless (overall_sources - source_ids).empty?
+  end
+
+  findings = decision["findings"]
+  findings = [] unless findings.is_a?(Array)
+  errors << "findings must be an array" unless decision["findings"].is_a?(Array)
+  finding_ids = findings.map { |item| item["finding_id"] }
+  errors << "finding decision IDs must be unique" unless finding_ids.uniq.length == finding_ids.length
+  errors << "finding decisions contain an ID outside required_finding_ids" unless (finding_ids - required_ids).empty?
+
+  dispositions = []
+  findings.each_with_index do |item, index|
+    unless item.is_a?(Hash)
+      errors << "finding decision #{index} must be a mapping"
+      next
+    end
+    finding_id = item["finding_id"]
+    match = FINDING_ID_PATTERN.match(finding_id.to_s)
+    errors << "finding decision #{index} has invalid Finding ID" unless match
+    disposition = item["disposition"]
+    dispositions << disposition
+    errors << "finding decision #{index} has invalid disposition" unless VALID_FINDING_DISPOSITION.include?(disposition)
+    owner_decision = item["owner_decision"]
+    errors << "finding decision #{index}.owner_decision must be a non-empty string" unless owner_decision.is_a?(String) && !owner_decision.empty?
+    errors << "finding decision #{index}.remediation_constraints must be an array" unless item["remediation_constraints"].is_a?(Array)
+
+    item_sources = item["decision_source_ids"]
+    unless item_sources.is_a?(Array) && !item_sources.empty?
+      errors << "finding decision #{index}.decision_source_ids must be non-empty"
+    else
+      errors << "finding decision #{index} references an unknown decision source" unless (item_sources - source_ids).empty?
+    end
+
+    if disposition == "deferred"
+      reason = item["deferred_reason"]
+      errors << "deferred finding #{finding_id} requires deferred_reason" unless reason.is_a?(String) && !reason.empty?
+      tracking = item["tracking_ref"]
+      if !tracking.nil? && (!tracking.is_a?(String) || tracking.empty?)
+        errors << "deferred finding #{finding_id}.tracking_ref must be null or non-empty"
+      end
+    end
+  end
+
+  if completion == "complete"
+    errors << "complete decision must cover every required Finding ID exactly once" unless finding_ids.sort == required_ids.sort
+    errors << "complete decision cannot contain unresolved finding dispositions" if dispositions.include?("unresolved")
+    errors << "complete decision cannot use deep_review_incomplete" if overall == "deep_review_incomplete"
+    errors << "complete decision cannot have unresolved spec_status" if spec_status == "unresolved"
+  end
+
+  errors << "deep_review_incomplete requires completion: partial" if overall == "deep_review_incomplete" && completion != "partial"
+
+  if overall == "approve"
+    errors << "approve requires spec_status still_valid" unless spec_status == "still_valid"
+    blocking = dispositions & %w[remediate spec_change_required unresolved]
+    errors << "approve cannot coexist with required remediation/spec change/unresolved findings" unless blocking.empty?
+  end
+
+  if dispositions.include?("spec_change_required")
+    errors << "spec_change_required requires spec_status change_required" unless spec_status == "change_required"
+    errors << "spec_change_required requires request_changes" unless overall == "request_changes"
+  end
+
+  if overall == "request_changes" && spec_status == "still_valid"
+    errors << "spec_review request_changes must return to Spec change" if decision["stage"] == "spec_review"
+    errors << "request_changes + still_valid requires at least one remediate finding" unless dispositions.include?("remediate")
+    errors << "request_changes + still_valid cannot contain spec_change_required" if dispositions.include?("spec_change_required")
+  end
+
+  if overall == "request_changes" && spec_status == "change_required"
+    errors << "request_changes + change_required requires a spec_change_required finding" unless dispositions.include?("spec_change_required")
+  end
+
+  errors
+end
+
+def validate_decision_record(decision, round, label)
+  errors = decision_record_errors(decision, round)
+  fail_contract("#{label}: #{errors.join("; ")}") unless errors.empty?
+end
+
+def decision_revision_errors(previous, current)
+  errors = []
+  errors << "revision must increment by one" unless current["revision"] == previous["revision"] + 1
+  errors << "supersedes_ref must equal previous record_ref" unless current["supersedes_ref"] == previous["record_ref"]
+  %w[repository pr review_round_ref review_head stage].each do |key|
+    errors << "#{key} changed across decision revisions" unless current[key] == previous[key]
+  end
+  errors << "record_ref must change across revisions" if current["record_ref"] == previous["record_ref"]
+  errors
+end
+
+def decision_route(decision, round)
+  return "blocked" unless decision_record_errors(decision, round).empty?
+  return "human_review" if decision["completion"] != "complete" || decision["overall_decision"] == "deep_review_incomplete" || decision["spec_status"] == "unresolved"
+
+  dispositions = decision["findings"].map { |item| item["disposition"] }
+  return "spec_loop" if decision["spec_status"] == "change_required" || dispositions.include?("spec_change_required")
+
+  if decision["stage"] == "spec_review" && decision["overall_decision"] == "approve"
+    return "tickets_or_implementation"
+  end
+
+  if decision["stage"] == "final_review" && decision["overall_decision"] == "approve"
+    return "closeout"
+  end
+
+  if decision["stage"] == "final_review" && decision["overall_decision"] == "request_changes" &&
+     decision["spec_status"] == "still_valid" && dispositions.include?("remediate")
+    return "implementation_remediation"
+  end
+
+  "blocked"
+end
+
+def legacy_round_readable?(round)
+  round.is_a?(Hash) &&
+    round["schema_version"] == 1 &&
+    round["artifact"] == "hrb-review-round-record" &&
+    round["repository"].is_a?(String) &&
+    round["pr"].is_a?(Integer) &&
+    round["round"].is_a?(Integer) &&
+    round["fresh_review"].is_a?(Hash)
+end
+
 product_spec_path = "docs/HRB-0_PRODUCT_SPEC.md"
 skill_path = "SKILL.md"
 human_path = "HUMAN.md"
