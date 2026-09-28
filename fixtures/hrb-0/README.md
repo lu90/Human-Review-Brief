@@ -44,11 +44,11 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C17_FINDING_CONTINUITY` — inherited Finding IDs remain linked across rounds even when Fresh Review finds nothing new.
 - `C18_DECISION_SOURCE` — Agent inference cannot substitute for an explicit recoverable human statement.
 - `C19_IMPLEMENTATION_REPORT_GATE` — Final HRB requires a current Implementation Report while Spec HRB does not.
-- `C20_HEAD_INVALIDATION` — old-head approval cannot route a new head.
-- `C21_RECOVERY_IDEMPOTENCE` — restart recovery avoids duplicate writes/actions.
+- `C20_HEAD_INVALIDATION` — old-head approval cannot approve a new head, while proven descendant work can resume through route-specific durable progress, including Spec Loop and HRB-ready states.
+- `C21_RECOVERY_IDEMPOTENCE` — restart recovery validates the whole Decision revision graph, payload bodies, and duplicate-write avoidance.
 - `C22_AUTHORIZATION_BOUNDARY` — HRB approval does not grant merge/tracker/comment authorization.
 - `C23_LEGACY_COMPATIBILITY` — legacy Round Records remain readable but cannot synthesize missing human approval.
 
 The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+, plus prior/partial/complete Review Decision Record examples. `review-payload-comments.example.yaml` contains actual marked PR-comment bodies for Raw Findings, Human Review Briefs, and remediation evidence.
 
-Deterministic self-checks execute the recovery functions rather than only checking expected fixture booleans: they parse marked comment YAML, resolve payload references, traverse Decision supersession, distinguish exact-head gate authority from descendant-head work continuation, validate prior-Decision-driven carry-forward, reject omitted unresolved/remediation-required Findings, and reject foreign/non-owning `source_round_ref` values. They also retain the earlier transition, contradiction, stale-head, and legacy fail-closed checks.
+Deterministic self-checks execute the recovery functions rather than only checking expected fixture booleans: they parse marked comment YAML; require non-null type-specific payload bodies; verify Raw Finding IDs against the Round Record; validate remediation payload correspondence; validate the entire Decision revision graph and reject hidden cycles; distinguish exact-head gate authority from descendant-head work continuation; resume implementation/remediation/Spec Loop work; route `ready_for_final_hrb` to Final HRB and `ready_for_spec_hrb` to Spec HRB; validate prior-Decision-driven carry-forward; reject omitted unresolved/remediation-required Findings; and reject foreign/non-owning `source_round_ref` values. They also retain the earlier transition, contradiction, stale-head, and legacy fail-closed checks.
