@@ -37,6 +37,14 @@ VALID_FINDING_DISPOSITION = %w[
 ].freeze
 ROUND_RECORD_MARKER = "hrb-review-round-record:v1"
 DECISION_RECORD_MARKER = "hrb-review-decision-record:v1"
+RAW_FINDINGS_MARKER = "hrb-raw-findings:v1"
+HUMAN_REVIEW_BRIEF_MARKER = "hrb-human-review-brief:v1"
+REMEDIATION_EVIDENCE_MARKER = "hrb-remediation-evidence:v1"
+PAYLOAD_MARKERS = {
+  "raw_findings" => RAW_FINDINGS_MARKER,
+  "human_review_brief" => HUMAN_REVIEW_BRIEF_MARKER,
+  "remediation_evidence" => REMEDIATION_EVIDENCE_MARKER
+}.freeze
 FINDING_ID_PATTERN = /\AR(\d+)-RF-(\d{2,})\z/.freeze
 
 REQUIRED_CASE_IDS = %w[
@@ -127,11 +135,174 @@ def validate_storage(value, repository, pr, marker, label)
   fail_contract("#{label}.marker must be #{marker.inspect}") unless value["marker"] == marker
 end
 
+def validate_payload_storage(value, repository, pr, label)
+  fail_contract("#{label} must be a mapping") unless value.is_a?(Hash)
+  fail_contract("#{label}.provider must be github_pr_comment") unless value["provider"] == "github_pr_comment"
+  expected_discovery = "github-pr-comments://#{repository}/pull/#{pr}"
+  fail_contract("#{label}.discovery_ref must be #{expected_discovery.inspect}") unless value["discovery_ref"] == expected_discovery
+  fail_contract("#{label}.markers drifted") unless value["markers"] == PAYLOAD_MARKERS
+end
+
+def parse_marked_yaml_comment(body, marker)
+  return nil unless body.is_a?(String)
+
+  marker_line = "<!-- #{marker} -->"
+  return nil unless body.include?(marker_line)
+
+  match = body.match(/#{Regexp.escape(marker_line)}\s*```yaml\s*\n(.*?)\n```/m)
+  return :malformed unless match
+
+  YAML.safe_load(match[1], aliases: false)
+rescue Psych::Exception
+  :malformed
+end
+
+def recover_marked_records(comments, marker, artifact)
+  records = []
+  errors = []
+
+  comments.each_with_index do |comment, index|
+    parsed = parse_marked_yaml_comment(comment["body"], marker)
+    next if parsed.nil?
+
+    if parsed == :malformed || !parsed.is_a?(Hash)
+      errors << "comment #{index} with marker #{marker} is malformed"
+      next
+    end
+
+    unless parsed["artifact"] == artifact
+      errors << "comment #{index} with marker #{marker} has wrong artifact"
+      next
+    end
+
+    records << parsed
+  end
+
+  [records, errors]
+end
+
+def recover_record_by_ref(comments, marker, artifact, record_ref)
+  records, errors = recover_marked_records(comments, marker, artifact)
+  matches = records.select { |record| record["record_ref"] == record_ref }
+  errors << "record #{record_ref} not found" if matches.empty?
+  errors << "record #{record_ref} is duplicated" if matches.length > 1
+  [matches.length == 1 ? matches.first : nil, errors]
+end
+
+def resolve_payload(comments, marker, payload_type, record_ref, round)
+  payload, errors = recover_record_by_ref(comments, marker, "hrb-review-payload", record_ref)
+  return [nil, errors] unless payload
+
+  errors << "payload type mismatch for #{record_ref}" unless payload["payload_type"] == payload_type
+  errors << "payload repository mismatch for #{record_ref}" unless payload["repository"] == round["repository"]
+  errors << "payload PR mismatch for #{record_ref}" unless payload["pr"] == round["pr"]
+  errors << "payload round mismatch for #{record_ref}" unless payload["review_round_ref"] == round["record_ref"]
+  errors << "payload head mismatch for #{record_ref}" unless payload["review_head"] == round["current_review_head"]
+  errors << "payload content missing for #{record_ref}" unless payload.key?("content")
+  [payload, errors]
+end
+
+def resolve_round_payloads(round, comments)
+  errors = []
+
+  _raw, raw_errors = resolve_payload(
+    comments,
+    RAW_FINDINGS_MARKER,
+    "raw_findings",
+    round.dig("fresh_review", "raw_findings_ref"),
+    round
+  )
+  errors.concat(raw_errors)
+
+  _brief, brief_errors = resolve_payload(
+    comments,
+    HUMAN_REVIEW_BRIEF_MARKER,
+    "human_review_brief",
+    round.dig("brief", "brief_ref"),
+    round
+  )
+  errors.concat(brief_errors)
+
+  remediation = round["remediation_verification"]
+  if remediation.is_a?(Hash)
+    remediation.fetch("results", []).each do |result|
+      _evidence, evidence_errors = resolve_payload(
+        comments,
+        REMEDIATION_EVIDENCE_MARKER,
+        "remediation_evidence",
+        result["evidence_ref"],
+        round
+      )
+      errors.concat(evidence_errors)
+    end
+  end
+
+  errors
+end
+
 def decision_scope_ids(round)
   continuity = round["finding_continuity"]
   return round.dig("fresh_review", "finding_ids") unless continuity.is_a?(Hash)
 
   continuity["decision_scope_finding_ids"]
+end
+
+def finding_dispositions(decision)
+  return {} unless decision.is_a?(Hash) && decision["findings"].is_a?(Array)
+
+  decision["findings"].to_h { |item| [item["finding_id"], item["disposition"]] }
+end
+
+def required_carry_ids(previous_round, previous_decision)
+  required_ids = decision_scope_ids(previous_round)
+  return [] unless required_ids.is_a?(Array)
+  return required_ids if !previous_decision.is_a?(Hash) || previous_decision["completion"] == "partial"
+
+  dispositions = finding_dispositions(previous_decision)
+  required_ids.select do |finding_id|
+    disposition = dispositions[finding_id]
+    disposition.nil? || %w[remediate spec_change_required unresolved].include?(disposition)
+  end
+end
+
+def round_lineage_errors(previous, current, previous_decision, lineage_records)
+  errors = round_transition_errors(previous, current)
+  inherited = current.dig("finding_continuity", "inherited")
+  inherited = [] unless inherited.is_a?(Array)
+  inherited_ids = inherited.map { |item| item["finding_id"] }
+
+  required = required_carry_ids(previous, previous_decision)
+  missing = required - inherited_ids
+  errors << "required prior Finding IDs missing from carry-forward: #{missing.join(", ")}" unless missing.empty?
+
+  records_by_ref = lineage_records.to_h { |record| [record["record_ref"], record] }
+  inherited.each do |item|
+    source = records_by_ref[item["source_round_ref"]]
+    unless source
+      errors << "inherited #{item["finding_id"]} source_round_ref is outside the supplied lineage"
+      next
+    end
+
+    same_lineage =
+      source["repository"] == current["repository"] &&
+      source["pr"] == current["pr"] &&
+      source["base_sha"] == current["base_sha"] &&
+      source["round"].is_a?(Integer) &&
+      source["round"] < current["round"]
+    errors << "inherited #{item["finding_id"]} source_round_ref is not in the current repository/PR/base lineage" unless same_lineage
+
+    source_ids = decision_scope_ids(source)
+    source_fresh_ids = source.dig("fresh_review", "finding_ids")
+    owned = [source_ids, source_fresh_ids].compact.any? { |ids| ids.include?(item["finding_id"]) }
+    errors << "inherited #{item["finding_id"]} is not owned by source_round_ref" unless owned
+  end
+
+  errors
+end
+
+def validate_round_lineage(previous, current, previous_decision, lineage_records, label)
+  errors = round_lineage_errors(previous, current, previous_decision, lineage_records)
+  fail_contract("#{label}: #{errors.join("; ")}") unless errors.empty?
 end
 
 def load_handoff_template(path)
@@ -222,6 +393,7 @@ def validate_round_record(round, label)
   fail_contract("#{label}: review_stage invalid") unless VALID_REVIEW_STAGE.include?(round["review_stage"])
   fail_contract("#{label}: round must be a positive integer") unless round["round"].is_a?(Integer) && round["round"] > 0
   validate_storage(round["storage"], round["repository"], round["pr"], ROUND_RECORD_MARKER, "#{label}.storage")
+  validate_payload_storage(round["payload_storage"], round["repository"], round["pr"], "#{label}.payload_storage")
   expected_ref_prefix = "hrb://github/#{round["repository"]}/pull/#{round["pr"]}/review-round/"
   fail_contract("#{label}: record_ref must use the durable hrb://github PR namespace") unless round["record_ref"].start_with?(expected_ref_prefix)
 
