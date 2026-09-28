@@ -1184,18 +1184,51 @@ validate_handoff_template(
 
 round1 = YAML.safe_load(File.read(round1_path), aliases: false)
 round2 = YAML.safe_load(File.read(round2_path), aliases: false)
+round1_decision = YAML.safe_load(File.read(round1_decision_path), aliases: false)
+partial_decision = YAML.safe_load(File.read(partial_decision_path), aliases: false)
+decision = YAML.safe_load(File.read(decision_path), aliases: false)
+payload_comment_suite = YAML.safe_load(File.read(payload_comments_path), aliases: false)
+payload_comments = payload_comment_suite["comments"]
+
 fail_contract("round-1 example must use round: 1") unless round1["round"] == 1
 fail_contract("round-2+ example must use round >= 2") unless round2["round"].is_a?(Integer) && round2["round"] >= 2
 validate_round_record(round1, "round-1 example")
 validate_round_record(round2, "round-2 example")
+validate_decision_record(round1_decision, round1, "round-1 decision example")
 validate_round_transition(round1, round2, "round-1 -> round-2 transition")
+validate_round_lineage(round1, round2, round1_decision, [round1], "round-1 -> round-2 lineage")
 
-partial_decision = YAML.safe_load(File.read(partial_decision_path), aliases: false)
-decision = YAML.safe_load(File.read(decision_path), aliases: false)
+# Exercise actual PR-comment payload parsing and reference resolution.
+payload_errors = resolve_round_payloads(round2, payload_comments)
+fail_contract("payload recovery failed: #{payload_errors.join("; ")}") unless payload_errors.empty?
+
+missing_payload_comments = payload_comments.reject { |comment| comment["body"].include?("hrb-raw-findings:v1") }
+missing_payload_errors = resolve_round_payloads(round2, missing_payload_comments)
+fail_contract("negative payload recovery check: missing Raw Findings payload was accepted") if missing_payload_errors.empty?
+
+# Exercise actual Round Record comment parsing.
+round_comment = render_yaml_comment(ROUND_RECORD_MARKER, round2)
+recovered_round, recovered_round_errors = recover_record_by_ref(
+  [round_comment],
+  ROUND_RECORD_MARKER,
+  "hrb-review-round-record",
+  round2["record_ref"]
+)
+fail_contract("round comment recovery failed: #{recovered_round_errors.join("; ")}") unless recovered_round_errors.empty? && recovered_round == round2
+
+# Exercise actual Decision Record recovery and explicit supersession traversal.
 validate_decision_record(partial_decision, round2, "partial decision example")
 validate_decision_record(decision, round2, "complete decision example")
 revision_errors = decision_revision_errors(partial_decision, decision)
 fail_contract("decision revision example invalid: #{revision_errors.join("; ")}") unless revision_errors.empty?
+
+decision_comments = [
+  render_yaml_comment(DECISION_RECORD_MARKER, partial_decision),
+  render_yaml_comment(DECISION_RECORD_MARKER, decision)
+]
+effective_decision, recovery_errors = recover_effective_decision(decision_comments, round2)
+fail_contract("effective decision recovery failed: #{recovery_errors.join("; ")}") unless recovery_errors.empty? && effective_decision == decision
+
 fail_contract("partial decision must route to human_review") unless decision_route(partial_decision, round2) == "human_review"
 fail_contract("complete decision example must route to implementation_remediation") unless decision_route(decision, round2) == "implementation_remediation"
 
@@ -1222,6 +1255,70 @@ spec_change["findings"].first["owner_decision"] = "Change the governing Spec bef
 validate_decision_record(spec_change, round2, "spec change route")
 fail_contract("request_changes + change_required must route to spec_loop") unless decision_route(spec_change, round2) == "spec_loop"
 
+# Old-head decisions cannot approve a new head, but can resume explicitly authorized descendant work.
+advanced_head = "4444444444444444444444444444444444444444"
+fail_contract("old-head decision incorrectly approved advanced head") unless gate_route_for_head(decision, round2, advanced_head) == "blocked"
+
+remediation_progress = {
+  "artifact" => "implementation-progress",
+  "repository" => round2["repository"],
+  "pr" => round2["pr"],
+  "source_decision_ref" => decision["record_ref"],
+  "route" => "implementation_remediation",
+  "start_head" => decision["review_head"],
+  "current_head" => advanced_head,
+  "status" => "in_progress",
+  "scope" => {
+    "finding_ids" => %w[R2-RF-01 R2-RF-02]
+  },
+  "completed_slices" => ["R2-RF-01"],
+  "pending_slices" => ["R2-RF-02"]
+}
+continuation, continuation_errors_list = continuation_route(
+  decision,
+  round2,
+  advanced_head,
+  [[decision["review_head"], advanced_head]],
+  remediation_progress
+)
+fail_contract("valid remediation continuation failed: #{continuation_errors_list.join("; ")}") unless continuation == "implementation_remediation" && continuation_errors_list.empty?
+
+bad_progress = deep_copy(remediation_progress)
+bad_progress["source_decision_ref"] = "hrb://github/lu90/example/pull/123/decision/unrelated"
+bad_route, bad_route_errors = continuation_route(
+  decision,
+  round2,
+  advanced_head,
+  [[decision["review_head"], advanced_head]],
+  bad_progress
+)
+fail_contract("negative continuation check: mismatched source decision was accepted") unless bad_route == "blocked" && !bad_route_errors.empty?
+
+spec_progress = {
+  "artifact" => "implementation-progress",
+  "repository" => spec_round["repository"],
+  "pr" => spec_round["pr"],
+  "source_decision_ref" => spec_approve["record_ref"],
+  "route" => "tickets_or_implementation",
+  "start_head" => spec_approve["review_head"],
+  "current_head" => advanced_head,
+  "status" => "in_progress",
+  "scope" => {
+    "approved_spec_ref" => "docs/spec.md@#{spec_approve["review_head"]}",
+    "governing_scope_unchanged" => true
+  },
+  "completed_slices" => ["ticket-1"],
+  "pending_slices" => ["ticket-2"]
+}
+spec_continuation, spec_continuation_errors = continuation_route(
+  spec_approve,
+  spec_round,
+  advanced_head,
+  [[spec_approve["review_head"], advanced_head]],
+  spec_progress
+)
+fail_contract("valid Spec-approved implementation continuation failed: #{spec_continuation_errors.join("; ")}") unless spec_continuation == "tickets_or_implementation" && spec_continuation_errors.empty?
+
 # Exercise valid zero-finding lineage without replacing the canonical non-empty transition.
 zero_previous = deep_copy(round1)
 zero_previous["fresh_review"]["finding_ids"] = []
@@ -1235,7 +1332,7 @@ validate_round_record(zero_previous, "zero-finding previous round")
 validate_round_record(zero_current, "zero-finding current round")
 validate_round_transition(zero_previous, zero_current, "zero-finding transition")
 
-# A later round may have no new Fresh Findings while carrying a prior unresolved Finding.
+# A later round may have no new Fresh Findings while carrying a prior unresolved/remediation-required Finding.
 no_new_fresh = deep_copy(round2)
 no_new_fresh["fresh_review"]["finding_ids"] = []
 no_new_fresh["fresh_review"]["coverage_manifest"] = DIMENSIONS.to_h { |dimension| [dimension, "reviewed_no_finding"] }
@@ -1243,7 +1340,20 @@ no_new_fresh["remediation_verification"]["results"].first["status"] = "unresolve
 no_new_fresh["finding_continuity"]["inherited"].first["remediation_status"] = "unresolved"
 no_new_fresh["finding_continuity"]["decision_scope_finding_ids"] = ["R1-RF-01"]
 validate_round_record(no_new_fresh, "no-new-fresh inherited round")
-validate_round_transition(round1, no_new_fresh, "no-new-fresh inherited transition")
+validate_round_lineage(round1, no_new_fresh, round1_decision, [round1], "no-new-fresh inherited lineage")
+
+# Negative: remediation result remains unresolved, but the required prior Finding is deliberately omitted.
+omitted_carry = deep_copy(no_new_fresh)
+omitted_carry["finding_continuity"]["inherited"] = []
+omitted_carry["finding_continuity"]["decision_scope_finding_ids"] = []
+omitted_carry_errors = round_lineage_errors(round1, omitted_carry, round1_decision, [round1])
+fail_contract("negative lineage check: remediation-required prior Finding disappeared without rejection") unless omitted_carry_errors.any? { |error| error.include?("missing from carry-forward") }
+
+# Negative: source_round_ref points outside the actual review lineage.
+foreign_source = deep_copy(no_new_fresh)
+foreign_source["finding_continuity"]["inherited"].first["source_round_ref"] = "hrb://github/other/repo/pull/999/review-round/1@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+foreign_source_errors = round_lineage_errors(round1, foreign_source, round1_decision, [round1])
+fail_contract("negative lineage check: foreign source_round_ref was accepted") unless foreign_source_errors.any? { |error| error.include?("outside the supplied lineage") }
 
 # Exercise negative transition paths through the same deterministic function.
 wrong_ref = deep_copy(round2)
@@ -1265,8 +1375,8 @@ unknown_finding["required_finding_ids"] << "R9-RF-99"
 fail_contract("negative decision check: unknown Finding ID was accepted") if decision_record_errors(unknown_finding, round2).empty?
 
 stale_head = deep_copy(decision)
-stale_head["review_head"] = "4444444444444444444444444444444444444444"
-fail_contract("negative decision check: stale review head was accepted") if decision_record_errors(stale_head, round2).empty?
+stale_head["review_head"] = advanced_head
+fail_contract("negative decision check: Decision Record no longer matches its own reviewed head") if decision_record_errors(stale_head, round2).empty?
 
 missing_source = deep_copy(decision)
 missing_source["decision_sources"].first["captured_statement"] = ""
@@ -1282,6 +1392,7 @@ fail_contract("negative decision revision check: wrong supersedes_ref was accept
 
 legacy_round = deep_copy(round1)
 legacy_round.delete("storage")
+legacy_round.delete("payload_storage")
 legacy_round.delete("review_stage")
 legacy_round.delete("finding_continuity")
 fail_contract("legacy compatibility check: old Review Round Record became unreadable") unless legacy_round_readable?(legacy_round)
