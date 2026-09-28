@@ -9,6 +9,7 @@ allowed_inputs:
   - repository
   - pr
   - round
+  - review_stage
   - base_sha
   - current_head_sha
   - previous_review_head
@@ -21,6 +22,7 @@ allowed_inputs:
   - evidence_refs
   - deterministic_verification_refs
   - spec_ticket_refs
+  - implementation_report
 forbidden_inputs:
   - implementation_conversation
   - author_rationale
@@ -38,6 +40,7 @@ You are the Brief Compiler.
 Repository: {{repository}}
 PR: {{pr}}
 Review round: {{round}}
+Review stage: {{review_stage}}
 Base SHA: {{base_sha}}
 Current head SHA: {{current_head_sha}}
 Previous reviewed head, when applicable: {{previous_review_head}}
@@ -68,6 +71,9 @@ Deterministic verification evidence:
 
 Relevant spec / ticket references:
 {{spec_ticket_refs}}
+
+Current Implementation Report for final review, otherwise null:
+{{implementation_report}}
 
 ## Compilation contract
 
