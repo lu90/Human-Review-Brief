@@ -766,7 +766,7 @@ require_path(c19, "C19", %w[expected isolation indirect_prior_review_material_re
 
 c20 = by_id.fetch("C20_HEAD_INVALIDATION")
 require_path(c20, "C20", %w[expected decision valid_for_current_head], false)
-require_path(c20, "C20", %w[expected decision route], "human_review")
+require_path(c20, "C20", %w[expected decision route], "blocked")
 
 c21 = by_id.fetch("C21_RECOVERY_IDEMPOTENCE")
 %w[
@@ -895,6 +895,29 @@ fail_contract("decision revision example invalid: #{revision_errors.join("; ")}"
 fail_contract("partial decision must route to human_review") unless decision_route(partial_decision, round2) == "human_review"
 fail_contract("complete decision example must route to implementation_remediation") unless decision_route(decision, round2) == "implementation_remediation"
 
+final_approve = deep_copy(decision)
+final_approve["overall_decision"] = "approve"
+final_approve["spec_status"] = "still_valid"
+final_approve["findings"].each { |item| item["disposition"] = "accepted"; item["owner_decision"] = "Accepted for delivery." }
+validate_decision_record(final_approve, round2, "final approve route")
+fail_contract("final approve must route to closeout") unless decision_route(final_approve, round2) == "closeout"
+
+spec_round = deep_copy(round2)
+spec_round["review_stage"] = "spec_review"
+spec_approve = deep_copy(final_approve)
+spec_approve["stage"] = "spec_review"
+validate_decision_record(spec_approve, spec_round, "spec approve route")
+fail_contract("spec approve must route to tickets_or_implementation") unless decision_route(spec_approve, spec_round) == "tickets_or_implementation"
+
+spec_change = deep_copy(decision)
+spec_change["overall_decision"] = "request_changes"
+spec_change["spec_status"] = "change_required"
+spec_change["findings"].each { |item| item["disposition"] = "accepted"; item["owner_decision"] = "Accepted unless changed below." }
+spec_change["findings"].first["disposition"] = "spec_change_required"
+spec_change["findings"].first["owner_decision"] = "Change the governing Spec before implementation."
+validate_decision_record(spec_change, round2, "spec change route")
+fail_contract("request_changes + change_required must route to spec_loop") unless decision_route(spec_change, round2) == "spec_loop"
+
 # Exercise valid zero-finding lineage without replacing the canonical non-empty transition.
 zero_previous = deep_copy(round1)
 zero_previous["fresh_review"]["finding_ids"] = []
@@ -907,6 +930,16 @@ zero_current["finding_continuity"]["decision_scope_finding_ids"] = zero_current[
 validate_round_record(zero_previous, "zero-finding previous round")
 validate_round_record(zero_current, "zero-finding current round")
 validate_round_transition(zero_previous, zero_current, "zero-finding transition")
+
+# A later round may have no new Fresh Findings while carrying a prior unresolved Finding.
+no_new_fresh = deep_copy(round2)
+no_new_fresh["fresh_review"]["finding_ids"] = []
+no_new_fresh["fresh_review"]["coverage_manifest"] = DIMENSIONS.to_h { |dimension| [dimension, "reviewed_no_finding"] }
+no_new_fresh["remediation_verification"]["results"].first["status"] = "unresolved"
+no_new_fresh["finding_continuity"]["inherited"].first["remediation_status"] = "unresolved"
+no_new_fresh["finding_continuity"]["decision_scope_finding_ids"] = ["R1-RF-01"]
+validate_round_record(no_new_fresh, "no-new-fresh inherited round")
+validate_round_transition(round1, no_new_fresh, "no-new-fresh inherited transition")
 
 # Exercise negative transition paths through the same deterministic function.
 wrong_ref = deep_copy(round2)
