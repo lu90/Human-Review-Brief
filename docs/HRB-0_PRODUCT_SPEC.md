@@ -746,7 +746,11 @@ A Review Round Record is factual orchestration metadata, not an authority that c
 
 For PR-centered HRB, the canonical durable state mechanism is a **GitHub PR comment** so review state can be discovered from repository/PR identity without changing the reviewed head. A current record MUST carry `storage.provider: github_pr_comment`, `storage.discovery_ref: github-pr-comments://OWNER/REPO/pull/NUMBER`, the canonical marker `hrb-review-round-record:v1`, and an `hrb://github/...` stable `record_ref`. The complete YAML record is stored in the marked PR comment.
 
-Recovery MUST enumerate the PR comments from the discovery reference, parse only the canonical marker, and validate repository, PR, head, round lineage, and record reference before using the state. Timestamp ordering MUST NOT determine record identity. Before a write, the Orchestrator SHOULD detect an identical `record_ref` and reuse it; after a write it MUST read the comment back and validate it. Discovery/write/read-back failure is fail-closed. PR-comment creation remains an external write subject to the runtime's authorization rules.
+The Review Round Record MUST also declare `payload_storage` for the same PR with canonical markers for `raw_findings`, `human_review_brief`, and `remediation_evidence`. Raw Findings, the compiled Human Review Brief, and remediation evidence are durable payload comments, not abstract references. Their canonical markers are `hrb-raw-findings:v1`, `hrb-human-review-brief:v1`, and `hrb-remediation-evidence:v1`.
+
+Each payload comment MUST contain a machine-readable `hrb-review-payload` envelope with `payload_type`, stable `record_ref`, repository, PR, `review_round_ref`, review head, and complete recoverable `content`. Resolution enumerates the declared PR comments, selects the expected marker, matches `record_ref` exactly, and validates repository/PR/round/head/type. Missing, duplicate, malformed, or scope-mismatched payloads fail closed. A bare `hrb://` reference without a resolvable payload is not durable evidence.
+
+Recovery MUST enumerate the PR comments from the discovery reference, parse only canonical markers, and validate repository, PR, head, round lineage, record reference, and every referenced payload before using the state. Timestamp ordering MUST NOT determine record identity. Before a write, the Orchestrator SHOULD detect an identical `record_ref` and reuse it; after a write it MUST read the comment back and validate it. Discovery/write/read-back failure is fail-closed. PR-comment creation remains an external write subject to the runtime's authorization rules.
 
 Round 1 MUST encode `previous_review_head: null` and `remediation_verification: null`; round 2+ MUST reference the previous review head and prior Review Round Record. Generated review-state records MUST NOT be committed into the PR under review when doing so would mutate the reviewed head. Legacy Review Round Records remain readable, but the absence of a valid Review Decision Record MUST NOT be interpreted as historical approval.
 
@@ -763,6 +767,10 @@ For round 2+, the Orchestrator MUST deterministically validate the transition ag
 
 The current Review Round Record MUST also preserve `finding_continuity.inherited` and `finding_continuity.decision_scope_finding_ids`. The latter is the exact set that requires an Owner disposition in the current human-review surface. It may contain both current-round Fresh IDs and valid inherited IDs. A later round with zero new Fresh Findings can therefore continue an unresolved prior finding without requiring Fresh Review to rediscover it.
 
+Carry-forward is validated against the effective prior Review Decision Record, not only against whatever the current round happens to declare. Every prior required Finding with disposition `remediate`, `spec_change_required`, or `unresolved`, plus every required Finding not yet dispositioned in a partial Decision, MUST remain inherited until a later human decision resolves its disposition. `accepted` need not carry forward. `deferred` may leave the current decision scope only when the deferral was explicit and valid for the delivery.
+
+Every inherited `source_round_ref` MUST resolve to a prior Review Round Record in the same repository, PR, and base lineage, with a lower round number, and that source record MUST actually contain the Finding ID in its Fresh or decision-scope Finding set. Merely checking that `source_round_ref` is non-empty is insufficient.
+
 Machine remediation status and Owner disposition are distinct state. A machine status does not silently overwrite an Owner decision; new evidence that requires reconsideration is surfaced for a new human decision.
 
 These are structured-data referential and cross-field invariants, not natural-language semantic judgments. They MUST be checked deterministically.
@@ -771,8 +779,13 @@ Deterministic contract tooling MUST exercise at least:
 
 - a valid non-empty prior-finding remediation transition;
 - a valid zero-prior-finding transition;
+- a valid inherited-only round with zero new Fresh Findings;
 - rejection of a missing remediation result;
-- rejection of a duplicate remediation result.
+- rejection of a duplicate remediation result;
+- rejection when a prior remediation-required/unresolved Finding is omitted from carry-forward;
+- rejection of a foreign or non-owning `source_round_ref`;
+- actual parsing/recovery of Round/Decision/payload comments and rejection of missing payloads;
+- exact-head gate invalidation plus valid descendant-head continuation using durable progress evidence.
 
 This requirement does not introduce a general natural-language semantic validator.
 
@@ -811,7 +824,7 @@ Canonical examples live at:
 
 ### 18.2 Decision validation and routing contract
 
-Before routing, the Orchestrator MUST verify that the effective Decision Record is readable from durable storage, belongs to the current repository/PR, references the exact Review Round Record and review head, is valid for the current stage, contains only current or valid inherited Finding IDs, covers all required findings when complete, has recoverable human decision sources, and has no contradictory overall/spec/per-finding state.
+Before using a Decision Record as a **review-gate conclusion**, the Orchestrator MUST verify that the effective Decision Record is readable from durable storage, belongs to the current repository/PR, references the exact Review Round Record and reviewed head, is valid for the current stage, contains only current or valid inherited Finding IDs, covers all required findings when complete, has recoverable human decision sources, and has no contradictory overall/spec/per-finding state.
 
 The deterministic routing outcomes are:
 
@@ -824,7 +837,13 @@ The deterministic routing outcomes are:
 
 Spec-review changes MUST return to Spec review rather than code remediation. If implementation defects and Spec changes coexist, settle the Spec path first. `approve` MUST NOT coexist with required remediation, required Spec change, or unresolved state. Explicitly deferred work MAY coexist with approval only when it is genuinely allowed to leave the current delivery and does not hide an incomplete in-scope requirement.
 
-A new review head invalidates an old-head approval for automatic routing. Automatic routing removes the need for the human to name the next skill; it does not create external-write authorization.
+A new review head invalidates an old-head **approval** for the new head, but it does not automatically invalidate the old Decision as continuation authority for work it explicitly authorized.
+
+When the branch has advanced beyond the reviewed head, a fresh Orchestrator MAY resume already-started implementation or remediation only if it proves that the current head descends from the reviewed head on the same repository/PR line and recovers durable implementation-progress evidence that names the source Decision `record_ref`, active route, reviewed/start head, current head, approved scope references, completed/pending slices, and current status. For implementation remediation, the progress Finding scope MUST be a subset of the Owner's explicit `remediate` dispositions. For Spec-approved implementation, the approved canonical Spec/governing scope MUST remain materially unchanged. Scope drift, changed governing Spec, missing progress evidence, mismatched source Decision, or unprovable ancestry blocks continuation.
+
+This continuation rule permits verification, report/progress updates, code review, regression checks, and preparation of the next HRB. It MUST NOT treat the old Decision as approval of the new head. The next review gate still requires a new exact-head review/Decision before closeout or equivalent approval-dependent action.
+
+Automatic routing removes the need for the human to name the next skill; it does not create external-write authorization.
 
 ### 18.3 Final-review Implementation Report gate
 
