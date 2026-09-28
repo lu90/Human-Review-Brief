@@ -49,4 +49,6 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C22_AUTHORIZATION_BOUNDARY` — HRB approval does not grant merge/tracker/comment authorization.
 - `C23_LEGACY_COMPATIBILITY` — legacy Round Records remain readable but cannot synthesize missing human approval.
 
-The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+, plus partial and complete Review Decision Record examples. Deterministic self-checks exercise non-empty and zero-finding transitions, decision revisions/routing, missing/duplicate/unknown Finding IDs, stale heads, contradictory decisions, and legacy fail-closed behavior.
+The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+, plus prior/partial/complete Review Decision Record examples. `review-payload-comments.example.yaml` contains actual marked PR-comment bodies for Raw Findings, Human Review Briefs, and remediation evidence.
+
+Deterministic self-checks execute the recovery functions rather than only checking expected fixture booleans: they parse marked comment YAML, resolve payload references, traverse Decision supersession, distinguish exact-head gate authority from descendant-head work continuation, validate prior-Decision-driven carry-forward, reject omitted unresolved/remediation-required Findings, and reject foreign/non-owning `source_round_ref` values. They also retain the earlier transition, contradiction, stale-head, and legacy fail-closed checks.
