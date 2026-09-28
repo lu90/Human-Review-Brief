@@ -1377,6 +1377,22 @@ end
 empty_brief_errors = resolve_round_payloads(round2, empty_brief_comments)
 fail_contract("negative payload content check: empty Human Review Brief was accepted") unless empty_brief_errors.any? { |error| error.include?("markdown must be non-empty") }
 
+remediation_ref = round2.dig("remediation_verification", "results", 0, "evidence_ref")
+remediation_payload, remediation_lookup_errors = recover_record_by_ref(
+  payload_comments,
+  REMEDIATION_EVIDENCE_MARKER,
+  "hrb-review-payload",
+  remediation_ref
+)
+fail_contract("remediation payload fixture lookup failed: #{remediation_lookup_errors.join("; ")}") unless remediation_lookup_errors.empty?
+bad_remediation_payload = deep_copy(remediation_payload)
+bad_remediation_payload["content"]["status"] = "unresolved"
+bad_remediation_comments = payload_comments.map do |comment|
+  comment["body"].include?(remediation_ref) ? render_yaml_comment(REMEDIATION_EVIDENCE_MARKER, bad_remediation_payload) : comment
+end
+bad_remediation_errors = resolve_round_payloads(round2, bad_remediation_comments)
+fail_contract("negative payload content check: remediation status mismatch was accepted") unless bad_remediation_errors.any? { |error| error.include?("status mismatch") }
+
 # Exercise actual Round Record comment parsing.
 round_comment = render_yaml_comment(ROUND_RECORD_MARKER, round2)
 recovered_round, recovered_round_errors = recover_record_by_ref(
