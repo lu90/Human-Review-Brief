@@ -527,12 +527,14 @@ readme_path = "README.md"
 cases_path = "fixtures/hrb-0/cases.yaml"
 round1_path = "fixtures/hrb-0/review-round-record-round1.example.yaml"
 round2_path = "fixtures/hrb-0/review-round-record.example.yaml"
+partial_decision_path = "fixtures/hrb-0/review-decision-record-partial.example.yaml"
+decision_path = "fixtures/hrb-0/review-decision-record.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
 fresh_handoff_path = "handoffs/fresh-review.md"
 remediation_handoff_path = "handoffs/remediation-review.md"
 compiler_handoff_path = "handoffs/brief-compiler.md"
 
-[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
+[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, partial_decision_path, decision_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
@@ -719,6 +721,7 @@ validate_handoff_template(
     repository
     pr
     round
+    review_stage
     base_sha
     current_head_sha
     originating_spec_refs
@@ -735,6 +738,8 @@ validate_handoff_template(
     prior_human_review_briefs
     prior_human_decisions
     prior_round_design_summaries
+    full_implementation_report
+    prior_review_material_from_indirect_inputs
   ]
 )
 
@@ -750,6 +755,7 @@ validate_handoff_template(
     previous_review_head
     current_head_sha
     prior_round_record
+    prior_review_decision_record
     prior_findings
     remediation_delta
     deterministic_verification_refs
@@ -772,6 +778,7 @@ validate_handoff_template(
     repository
     pr
     round
+    review_stage
     base_sha
     current_head_sha
     previous_review_head
@@ -784,6 +791,7 @@ validate_handoff_template(
     evidence_refs
     deterministic_verification_refs
     spec_ticket_refs
+    implementation_report
   ],
   %w[
     implementation_conversation
@@ -802,12 +810,24 @@ validate_round_record(round1, "round-1 example")
 validate_round_record(round2, "round-2 example")
 validate_round_transition(round1, round2, "round-1 -> round-2 transition")
 
+partial_decision = YAML.safe_load(File.read(partial_decision_path), aliases: false)
+decision = YAML.safe_load(File.read(decision_path), aliases: false)
+validate_decision_record(partial_decision, round2, "partial decision example")
+validate_decision_record(decision, round2, "complete decision example")
+revision_errors = decision_revision_errors(partial_decision, decision)
+fail_contract("decision revision example invalid: #{revision_errors.join("; ")}") unless revision_errors.empty?
+fail_contract("partial decision must route to human_review") unless decision_route(partial_decision, round2) == "human_review"
+fail_contract("complete decision example must route to implementation_remediation") unless decision_route(decision, round2) == "implementation_remediation"
+
 # Exercise valid zero-finding lineage without replacing the canonical non-empty transition.
 zero_previous = deep_copy(round1)
 zero_previous["fresh_review"]["finding_ids"] = []
 zero_previous["fresh_review"]["coverage_manifest"] = DIMENSIONS.to_h { |dimension| [dimension, "reviewed_no_finding"] }
+zero_previous["finding_continuity"]["decision_scope_finding_ids"] = []
 zero_current = deep_copy(round2)
 zero_current["remediation_verification"]["results"] = []
+zero_current["finding_continuity"]["inherited"] = []
+zero_current["finding_continuity"]["decision_scope_finding_ids"] = zero_current["fresh_review"]["finding_ids"]
 validate_round_record(zero_previous, "zero-finding previous round")
 validate_round_record(zero_current, "zero-finding current round")
 validate_round_transition(zero_previous, zero_current, "zero-finding transition")
@@ -826,6 +846,33 @@ duplicate_result = deep_copy(round2)
 duplicate_result["remediation_verification"]["results"] << deep_copy(duplicate_result["remediation_verification"]["results"].first)
 duplicate_errors = round_transition_errors(round1, duplicate_result)
 fail_contract("negative transition check: duplicate remediation result was accepted") unless duplicate_errors.include?("remediation result IDs must be unique")
+
+unknown_finding = deep_copy(decision)
+unknown_finding["required_finding_ids"] << "R9-RF-99"
+fail_contract("negative decision check: unknown Finding ID was accepted") if decision_record_errors(unknown_finding, round2).empty?
+
+stale_head = deep_copy(decision)
+stale_head["review_head"] = "4444444444444444444444444444444444444444"
+fail_contract("negative decision check: stale review head was accepted") if decision_record_errors(stale_head, round2).empty?
+
+missing_source = deep_copy(decision)
+missing_source["decision_sources"].first["captured_statement"] = ""
+fail_contract("negative decision check: missing human statement was accepted") if decision_record_errors(missing_source, round2).empty?
+
+contradictory = deep_copy(decision)
+contradictory["overall_decision"] = "approve"
+fail_contract("negative decision check: approve + remediate contradiction was accepted") if decision_record_errors(contradictory, round2).empty?
+
+wrong_supersession = deep_copy(decision)
+wrong_supersession["supersedes_ref"] = "hrb://github/lu90/example/pull/123/decision/unrelated"
+fail_contract("negative decision revision check: wrong supersedes_ref was accepted") if decision_revision_errors(partial_decision, wrong_supersession).empty?
+
+legacy_round = deep_copy(round1)
+legacy_round.delete("storage")
+legacy_round.delete("review_stage")
+legacy_round.delete("finding_continuity")
+fail_contract("legacy compatibility check: old Review Round Record became unreadable") unless legacy_round_readable?(legacy_round)
+fail_contract("legacy compatibility check: missing Decision Record must not route") unless decision_route({}, round1) == "blocked"
 
 policy_text = File.read(policy_path)
 fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")
