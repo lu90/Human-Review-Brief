@@ -1,8 +1,20 @@
 schema_version: 1
 artifact: hrb-review-round-record
-record_ref: "artifact://review-round-1"
+record_ref: "hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222"
+storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  marker: "hrb-review-round-record:v1"
 repository: lu90/example
 pr: 123
+payload_storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  markers:
+    raw_findings: "hrb-raw-findings:v1"
+    human_review_brief: "hrb-human-review-brief:v1"
+    remediation_evidence: "hrb-remediation-evidence:v1"
+review_stage: final_review
 round: 1
 base_sha: "1111111111111111111111111111111111111111"
 current_review_head: "2222222222222222222222222222222222222222"
@@ -14,7 +26,7 @@ fresh_review:
   reviewer_isolation:
     status: achieved
     method: fresh_context
-  raw_findings_ref: "artifact://review-round-1/raw-findings"
+  raw_findings_ref: "hrb://github/lu90/example/pull/123/review-round/1/raw-findings@2222222222222222222222222222222222222222"
   finding_ids:
     - R1-RF-01
   coverage_manifest:
@@ -29,8 +41,13 @@ fresh_review:
 
 remediation_verification: null
 
+finding_continuity:
+  inherited: []
+  decision_scope_finding_ids:
+    - R1-RF-01
+
 brief:
   compiler_isolation:
     status: achieved
     method: fresh_context
-  brief_ref: "artifact://review-round-1/human-review-brief"
+  brief_ref: "hrb://github/lu90/example/pull/123/review-round/1/human-review-brief@2222222222222222222222222222222222222222"

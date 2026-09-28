@@ -104,6 +104,14 @@ Choose one:
 - **Request changes** — evidence supports a concrete correction.
 - **Deep review selected item** — uncertainty remains localized and deserves more context.
 
+For **Request changes**, also state whether the current Spec is still valid or must change. For each Finding that matters to the route, make the disposition explicit: accept it, remediate it now, defer it with a reason, require a Spec change, or leave it unresolved for deeper review. You do not need to invent remediation constraints; an explicit empty constraint set is valid.
+
+The Orchestrator may persist partial decisions while you are still reviewing. Partial state does not authorize engineering progress. Once the required decisions are complete, the Orchestrator must save a Review Decision Record tied to the exact Review Round Record and review head, including the human statement it relied on. The record, not the surrounding conversation, becomes the recoverable decision state.
+
+If you later change or complete the decision, the new Review Decision Record must explicitly supersede the prior record. A Fresh Orchestrator must validate the revision chain, Finding IDs, decision source, current head, Spec status, and internal consistency before routing.
+
+Approval of an HRB is not merge permission, tracker-write permission, or any other external-write authorization.
+
 The goal is not to read everything.
 
 The goal is to spend human attention where it changes the quality of the decision.

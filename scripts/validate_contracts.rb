@@ -24,6 +24,33 @@ VALID_REMEDIATION_STATUS = %w[
   superseded
   cannot_verify
 ].freeze
+VALID_REVIEW_STAGE = %w[spec_review final_review].freeze
+VALID_DECISION_COMPLETION = %w[partial complete].freeze
+VALID_OVERALL_DECISION = %w[approve request_changes deep_review_incomplete].freeze
+VALID_SPEC_STATUS = %w[still_valid change_required unresolved].freeze
+VALID_FINDING_DISPOSITION = %w[
+  accepted
+  remediate
+  deferred
+  spec_change_required
+  unresolved
+].freeze
+VALID_PROGRESS_STATUS = %w[
+  in_progress
+  verifying
+  ready_for_final_hrb
+  ready_for_spec_hrb
+].freeze
+ROUND_RECORD_MARKER = "hrb-review-round-record:v1"
+DECISION_RECORD_MARKER = "hrb-review-decision-record:v1"
+RAW_FINDINGS_MARKER = "hrb-raw-findings:v1"
+HUMAN_REVIEW_BRIEF_MARKER = "hrb-human-review-brief:v1"
+REMEDIATION_EVIDENCE_MARKER = "hrb-remediation-evidence:v1"
+PAYLOAD_MARKERS = {
+  "raw_findings" => RAW_FINDINGS_MARKER,
+  "human_review_brief" => HUMAN_REVIEW_BRIEF_MARKER,
+  "remediation_evidence" => REMEDIATION_EVIDENCE_MARKER
+}.freeze
 FINDING_ID_PATTERN = /\AR(\d+)-RF-(\d{2,})\z/.freeze
 
 REQUIRED_CASE_IDS = %w[
@@ -40,6 +67,16 @@ REQUIRED_CASE_IDS = %w[
   C11_ISOLATION_UNAVAILABLE
   C12_HANDOFF_INPUT_ISOLATION
   C13_POLICY_INTRODUCED_SAME_PR
+  C14_DURABLE_REVIEW_STATE
+  C15_PARTIAL_DECISION
+  C16_DECISION_ROUTING
+  C17_FINDING_CONTINUITY
+  C18_DECISION_SOURCE
+  C19_IMPLEMENTATION_REPORT_GATE
+  C20_HEAD_INVALIDATION
+  C21_RECOVERY_IDEMPOTENCE
+  C22_AUTHORIZATION_BOUNDARY
+  C23_LEGACY_COMPATIBILITY
 ].freeze
 
 DIMENSIONS = %w[
@@ -96,6 +133,243 @@ def validate_isolation(value, label)
   end
 end
 
+def validate_storage(value, repository, pr, marker, label)
+  fail_contract("#{label} must be a mapping") unless value.is_a?(Hash)
+  fail_contract("#{label}.provider must be github_pr_comment") unless value["provider"] == "github_pr_comment"
+  expected_discovery = "github-pr-comments://#{repository}/pull/#{pr}"
+  fail_contract("#{label}.discovery_ref must be #{expected_discovery.inspect}") unless value["discovery_ref"] == expected_discovery
+  fail_contract("#{label}.marker must be #{marker.inspect}") unless value["marker"] == marker
+end
+
+def validate_payload_storage(value, repository, pr, label)
+  fail_contract("#{label} must be a mapping") unless value.is_a?(Hash)
+  fail_contract("#{label}.provider must be github_pr_comment") unless value["provider"] == "github_pr_comment"
+  expected_discovery = "github-pr-comments://#{repository}/pull/#{pr}"
+  fail_contract("#{label}.discovery_ref must be #{expected_discovery.inspect}") unless value["discovery_ref"] == expected_discovery
+  fail_contract("#{label}.markers drifted") unless value["markers"] == PAYLOAD_MARKERS
+end
+
+def parse_marked_yaml_comment(body, marker)
+  return nil unless body.is_a?(String)
+
+  marker_line = "<!-- #{marker} -->"
+  return nil unless body.include?(marker_line)
+
+  match = body.match(/#{Regexp.escape(marker_line)}\s*```yaml\s*\n(.*?)\n```/m)
+  return :malformed unless match
+
+  YAML.safe_load(match[1], aliases: false)
+rescue Psych::Exception
+  :malformed
+end
+
+def recover_marked_records(comments, marker, artifact)
+  records = []
+  errors = []
+
+  comments.each_with_index do |comment, index|
+    parsed = parse_marked_yaml_comment(comment["body"], marker)
+    next if parsed.nil?
+
+    if parsed == :malformed || !parsed.is_a?(Hash)
+      errors << "comment #{index} with marker #{marker} is malformed"
+      next
+    end
+
+    unless parsed["artifact"] == artifact
+      errors << "comment #{index} with marker #{marker} has wrong artifact"
+      next
+    end
+
+    records << parsed
+  end
+
+  [records, errors]
+end
+
+def recover_record_by_ref(comments, marker, artifact, record_ref)
+  records, errors = recover_marked_records(comments, marker, artifact)
+  matches = records.select { |record| record["record_ref"] == record_ref }
+  errors << "record #{record_ref} not found" if matches.empty?
+  errors << "record #{record_ref} is duplicated" if matches.length > 1
+  [matches.length == 1 ? matches.first : nil, errors]
+end
+
+def render_yaml_comment(marker, record)
+  yaml = YAML.dump(record).sub(/\A---\s*\n/, "")
+  { "body" => "<!-- #{marker} -->\n```yaml\n#{yaml}```" }
+end
+
+def resolve_payload(comments, marker, payload_type, record_ref, round)
+  payload, errors = recover_record_by_ref(comments, marker, "hrb-review-payload", record_ref)
+  return [nil, errors] unless payload
+
+  errors << "payload type mismatch for #{record_ref}" unless payload["payload_type"] == payload_type
+  errors << "payload repository mismatch for #{record_ref}" unless payload["repository"] == round["repository"]
+  errors << "payload PR mismatch for #{record_ref}" unless payload["pr"] == round["pr"]
+  errors << "payload round mismatch for #{record_ref}" unless payload["review_round_ref"] == round["record_ref"]
+  errors << "payload head mismatch for #{record_ref}" unless payload["review_head"] == round["current_review_head"]
+  [payload, errors]
+end
+
+def nonempty_string_array?(value)
+  value.is_a?(Array) && !value.empty? && value.all? { |item| item.is_a?(String) && !item.empty? }
+end
+
+def payload_content_errors(payload, payload_type, round, remediation_result = nil)
+  errors = []
+  content = payload && payload["content"]
+  unless content.is_a?(Hash)
+    errors << "#{payload_type} payload content must be a non-null mapping"
+    return errors
+  end
+
+  case payload_type
+  when "raw_findings"
+    findings = content["findings"]
+    unless findings.is_a?(Array)
+      errors << "raw_findings content.findings must be an array"
+      return errors
+    end
+
+    ids = findings.map { |item| item.is_a?(Hash) ? item["finding_id"] : nil }
+    expected_ids = round.dig("fresh_review", "finding_ids")
+    errors << "raw_findings Finding IDs must exactly match Review Round fresh_review.finding_ids" unless ids == expected_ids
+    findings.each_with_index do |item, index|
+      unless item.is_a?(Hash)
+        errors << "raw_findings finding #{index} must be a mapping"
+        next
+      end
+      claim = item["claim"]
+      errors << "raw_findings finding #{index}.claim must be non-empty" unless claim.is_a?(String) && !claim.empty?
+      errors << "raw_findings finding #{index}.evidence must be a non-empty string array" unless nonempty_string_array?(item["evidence"])
+    end
+  when "human_review_brief"
+    markdown = content["markdown"]
+    errors << "human_review_brief content.markdown must be non-empty" unless markdown.is_a?(String) && !markdown.strip.empty?
+  when "remediation_evidence"
+    unless remediation_result.is_a?(Hash)
+      errors << "remediation_evidence requires the referenced remediation result"
+      return errors
+    end
+    errors << "remediation_evidence prior_finding_id mismatch" unless content["prior_finding_id"] == remediation_result["prior_finding_id"]
+    errors << "remediation_evidence status mismatch" unless content["status"] == remediation_result["status"]
+    errors << "remediation_evidence evidence must be a non-empty string array" unless nonempty_string_array?(content["evidence"])
+  else
+    errors << "unsupported payload_type #{payload_type.inspect}"
+  end
+
+  errors
+end
+
+def resolve_round_payloads(round, comments)
+  errors = []
+
+  raw, raw_errors = resolve_payload(
+    comments,
+    RAW_FINDINGS_MARKER,
+    "raw_findings",
+    round.dig("fresh_review", "raw_findings_ref"),
+    round
+  )
+  errors.concat(raw_errors)
+  errors.concat(payload_content_errors(raw, "raw_findings", round)) if raw
+
+  brief, brief_errors = resolve_payload(
+    comments,
+    HUMAN_REVIEW_BRIEF_MARKER,
+    "human_review_brief",
+    round.dig("brief", "brief_ref"),
+    round
+  )
+  errors.concat(brief_errors)
+  errors.concat(payload_content_errors(brief, "human_review_brief", round)) if brief
+
+  remediation = round["remediation_verification"]
+  if remediation.is_a?(Hash)
+    remediation.fetch("results", []).each do |result|
+      evidence, evidence_errors = resolve_payload(
+        comments,
+        REMEDIATION_EVIDENCE_MARKER,
+        "remediation_evidence",
+        result["evidence_ref"],
+        round
+      )
+      errors.concat(evidence_errors)
+      errors.concat(payload_content_errors(evidence, "remediation_evidence", round, result)) if evidence
+    end
+  end
+
+  errors
+end
+
+def decision_scope_ids(round)
+  continuity = round["finding_continuity"]
+  return round.dig("fresh_review", "finding_ids") unless continuity.is_a?(Hash)
+
+  continuity["decision_scope_finding_ids"]
+end
+
+def finding_dispositions(decision)
+  return {} unless decision.is_a?(Hash) && decision["findings"].is_a?(Array)
+
+  decision["findings"].to_h { |item| [item["finding_id"], item["disposition"]] }
+end
+
+def required_carry_ids(previous_round, previous_decision)
+  required_ids = decision_scope_ids(previous_round)
+  return [] unless required_ids.is_a?(Array)
+  return required_ids if !previous_decision.is_a?(Hash) || previous_decision["completion"] == "partial"
+
+  dispositions = finding_dispositions(previous_decision)
+  required_ids.select do |finding_id|
+    disposition = dispositions[finding_id]
+    disposition.nil? || %w[remediate spec_change_required unresolved].include?(disposition)
+  end
+end
+
+def round_lineage_errors(previous, current, previous_decision, lineage_records)
+  errors = round_transition_errors(previous, current)
+  prior_decision_errors = decision_record_errors(previous_decision, previous)
+  errors.concat(prior_decision_errors.map { |message| "prior decision invalid: #{message}" })
+  inherited = current.dig("finding_continuity", "inherited")
+  inherited = [] unless inherited.is_a?(Array)
+  inherited_ids = inherited.map { |item| item["finding_id"] }
+
+  required = required_carry_ids(previous, previous_decision)
+  missing = required - inherited_ids
+  errors << "required prior Finding IDs missing from carry-forward: #{missing.join(", ")}" unless missing.empty?
+
+  records_by_ref = lineage_records.to_h { |record| [record["record_ref"], record] }
+  inherited.each do |item|
+    source = records_by_ref[item["source_round_ref"]]
+    unless source
+      errors << "inherited #{item["finding_id"]} source_round_ref is outside the supplied lineage"
+      next
+    end
+
+    same_lineage =
+      source["repository"] == current["repository"] &&
+      source["pr"] == current["pr"] &&
+      source["base_sha"] == current["base_sha"] &&
+      source["round"].is_a?(Integer) &&
+      source["round"] < current["round"]
+    errors << "inherited #{item["finding_id"]} source_round_ref is not in the current repository/PR/base lineage" unless same_lineage
+
+    source_ids = decision_scope_ids(source)
+    source_fresh_ids = source.dig("fresh_review", "finding_ids")
+    owned = [source_ids, source_fresh_ids].compact.any? { |ids| ids.include?(item["finding_id"]) }
+    errors << "inherited #{item["finding_id"]} is not owned by source_round_ref" unless owned
+  end
+
+  errors
+end
+
+def validate_round_lineage(previous, current, previous_decision, lineage_records, label)
+  errors = round_lineage_errors(previous, current, previous_decision, lineage_records)
+  fail_contract("#{label}: #{errors.join("; ")}") unless errors.empty?
+end
+
 def load_handoff_template(path)
   text = File.read(path)
   match = text.match(/\A---\n(.*?)\n---\n/m)
@@ -147,7 +421,7 @@ def round_transition_errors(previous, current)
   errors << "previous_review_head must equal prior current_review_head" unless current["previous_review_head"] == previous["current_review_head"]
   errors << "prior_round_ref must equal prior record_ref" unless current.dig("remediation_verification", "prior_round_ref") == previous["record_ref"]
 
-  prior_ids = previous.dig("fresh_review", "finding_ids")
+  prior_ids = decision_scope_ids(previous)
   results = current.dig("remediation_verification", "results")
 
   unless prior_ids.is_a?(Array)
@@ -181,7 +455,12 @@ def validate_round_record(round, label)
   require_nonempty_string(round["record_ref"], "#{label}.record_ref")
   require_nonempty_string(round["repository"], "#{label}.repository")
   fail_contract("#{label}: pr must be a positive integer") unless round["pr"].is_a?(Integer) && round["pr"] > 0
+  fail_contract("#{label}: review_stage invalid") unless VALID_REVIEW_STAGE.include?(round["review_stage"])
   fail_contract("#{label}: round must be a positive integer") unless round["round"].is_a?(Integer) && round["round"] > 0
+  validate_storage(round["storage"], round["repository"], round["pr"], ROUND_RECORD_MARKER, "#{label}.storage")
+  validate_payload_storage(round["payload_storage"], round["repository"], round["pr"], "#{label}.payload_storage")
+  expected_ref_prefix = "hrb://github/#{round["repository"]}/pull/#{round["pr"]}/review-round/"
+  fail_contract("#{label}: record_ref must use the durable hrb://github PR namespace") unless round["record_ref"].start_with?(expected_ref_prefix)
 
   %w[base_sha current_review_head].each do |key|
     value = round[key]
@@ -219,6 +498,32 @@ def validate_round_record(round, label)
   has_finding_coverage = coverage.value?("reviewed_with_findings")
   fail_contract("#{label}: Finding IDs and coverage manifest contradict each other") unless has_finding_ids == has_finding_coverage
 
+  continuity = round["finding_continuity"]
+  fail_contract("#{label}: missing finding_continuity") unless continuity.is_a?(Hash)
+  inherited = continuity["inherited"]
+  fail_contract("#{label}: finding_continuity.inherited must be an array") unless inherited.is_a?(Array)
+  inherited_ids = inherited.map { |item| item["finding_id"] }
+  fail_contract("#{label}: inherited Finding IDs must be unique") unless inherited_ids.uniq.length == inherited_ids.length
+  inherited.each_with_index do |item, index|
+    fail_contract("#{label}: inherited item #{index} must be a mapping") unless item.is_a?(Hash)
+    finding_id = item["finding_id"]
+    match = FINDING_ID_PATTERN.match(finding_id.to_s)
+    fail_contract("#{label}: inherited item #{index} has invalid Finding ID") unless match && match[1].to_i < round["round"]
+    require_nonempty_string(item["source_round_ref"], "#{label}.finding_continuity.inherited[#{index}].source_round_ref")
+    fail_contract("#{label}: inherited item #{index} has invalid remediation_status") unless VALID_REMEDIATION_STATUS.include?(item["remediation_status"])
+  end
+
+  decision_ids = continuity["decision_scope_finding_ids"]
+  fail_contract("#{label}: finding_continuity.decision_scope_finding_ids must be an array") unless decision_ids.is_a?(Array)
+  fail_contract("#{label}: decision-scope Finding IDs must be unique") unless decision_ids.uniq.length == decision_ids.length
+  decision_ids.each do |finding_id|
+    match = FINDING_ID_PATTERN.match(finding_id.to_s)
+    fail_contract("#{label}: invalid decision-scope Finding ID #{finding_id.inspect}") unless match && match[1].to_i <= round["round"]
+  end
+  expected_decision_ids = fresh["finding_ids"] + inherited_ids
+  fail_contract("#{label}: decision scope must exactly equal current Fresh plus inherited Finding IDs") unless decision_ids.sort == expected_decision_ids.sort
+  fail_contract("#{label}: round 1 cannot inherit prior Finding IDs") if round["round"] == 1 && !inherited.empty?
+
   if round["round"] >= 2
     remediation = round["remediation_verification"]
     fail_contract("#{label}: round 2+ requires remediation_verification") unless remediation.is_a?(Hash)
@@ -232,10 +537,16 @@ def validate_round_record(round, label)
       prior_finding_id = result["prior_finding_id"]
       require_nonempty_string(prior_finding_id, "#{label}.remediation result #{index}.prior_finding_id")
       match = FINDING_ID_PATTERN.match(prior_finding_id)
-      expected_prior_round = round["round"] - 1
-      fail_contract("#{label}: remediation result #{index} must reference a prior-round Finding ID") unless match && match[1].to_i == expected_prior_round
+      fail_contract("#{label}: remediation result #{index} must reference an earlier-round Finding ID") unless match && match[1].to_i < round["round"]
       fail_contract("#{label}: remediation result #{index} invalid status") unless VALID_REMEDIATION_STATUS.include?(result["status"])
       require_nonempty_string(result["evidence_ref"], "#{label}.remediation result #{index}.evidence_ref")
+    end
+
+    result_by_id = results.to_h { |result| [result["prior_finding_id"], result] }
+    inherited.each_with_index do |item, index|
+      result = result_by_id[item["finding_id"]]
+      fail_contract("#{label}: inherited item #{index} is not present in remediation results") unless result
+      fail_contract("#{label}: inherited item #{index} remediation status drifted") unless result["status"] == item["remediation_status"]
     end
   end
 
@@ -245,6 +556,378 @@ def validate_round_record(round, label)
   require_nonempty_string(brief["brief_ref"], "#{label}.brief.brief_ref")
 end
 
+def decision_record_errors(decision, round)
+  errors = []
+  return ["decision record must be a mapping"] unless decision.is_a?(Hash)
+
+  errors << "schema_version must be 1" unless decision["schema_version"] == 1
+  errors << "artifact must be hrb-review-decision-record" unless decision["artifact"] == "hrb-review-decision-record"
+
+  repository = decision["repository"]
+  pr = decision["pr"]
+  record_ref = decision["record_ref"]
+  errors << "record_ref must be a non-empty string" unless record_ref.is_a?(String) && !record_ref.empty?
+  errors << "repository must match Review Round Record" unless repository == round["repository"]
+  errors << "PR must match Review Round Record" unless pr == round["pr"]
+
+  storage = decision["storage"]
+  unless storage.is_a?(Hash)
+    errors << "storage must be a mapping"
+  else
+    expected_discovery = "github-pr-comments://#{round["repository"]}/pull/#{round["pr"]}"
+    errors << "storage provider must be github_pr_comment" unless storage["provider"] == "github_pr_comment"
+    errors << "storage discovery_ref must match repository/PR" unless storage["discovery_ref"] == expected_discovery
+    errors << "storage marker must be #{DECISION_RECORD_MARKER}" unless storage["marker"] == DECISION_RECORD_MARKER
+  end
+
+  expected_ref_prefix = "hrb://github/#{round["repository"]}/pull/#{round["pr"]}/decision/"
+  errors << "record_ref must use the durable hrb://github decision namespace" unless record_ref.is_a?(String) && record_ref.start_with?(expected_ref_prefix)
+  errors << "review_round_ref must match current Review Round Record" unless decision["review_round_ref"] == round["record_ref"]
+  errors << "review_head must match current review head" unless decision["review_head"] == round["current_review_head"]
+  errors << "stage must match current review stage" unless decision["stage"] == round["review_stage"]
+  errors << "revision must be a positive integer" unless decision["revision"].is_a?(Integer) && decision["revision"] > 0
+  if decision["revision"] == 1
+    errors << "revision 1 supersedes_ref must be null" unless decision["supersedes_ref"].nil?
+  elsif !decision["supersedes_ref"].is_a?(String) || decision["supersedes_ref"].empty?
+    errors << "revision 2+ requires supersedes_ref"
+  end
+
+  completion = decision["completion"]
+  overall = decision["overall_decision"]
+  spec_status = decision["spec_status"]
+  errors << "invalid completion" unless VALID_DECISION_COMPLETION.include?(completion)
+  errors << "invalid overall_decision" unless VALID_OVERALL_DECISION.include?(overall)
+  errors << "invalid spec_status" unless VALID_SPEC_STATUS.include?(spec_status)
+
+  required_ids = decision["required_finding_ids"]
+  expected_ids = decision_scope_ids(round)
+  unless required_ids.is_a?(Array)
+    errors << "required_finding_ids must be an array"
+    required_ids = []
+  end
+  errors << "required_finding_ids must be unique" unless required_ids.uniq.length == required_ids.length
+  errors << "required_finding_ids must exactly match the Review Round decision scope" unless expected_ids.is_a?(Array) && required_ids.sort == expected_ids.sort
+
+  sources = decision["decision_sources"]
+  source_ids = []
+  unless sources.is_a?(Array) && !sources.empty?
+    errors << "decision_sources must be a non-empty array"
+  else
+    source_ids = sources.map { |source| source["source_id"] }
+    errors << "decision source IDs must be unique" unless source_ids.uniq.length == source_ids.length
+    sources.each_with_index do |source, index|
+      unless source.is_a?(Hash)
+        errors << "decision source #{index} must be a mapping"
+        next
+      end
+      %w[source_id decided_by recorded_by captured_statement].each do |key|
+        value = source[key]
+        errors << "decision source #{index}.#{key} must be a non-empty string" unless value.is_a?(String) && !value.empty?
+      end
+      errors << "decision source #{index}.source_kind must be human_statement" unless source["source_kind"] == "human_statement"
+    end
+  end
+
+  overall_sources = decision["overall_decision_source_ids"]
+  unless overall_sources.is_a?(Array) && !overall_sources.empty?
+    errors << "overall_decision_source_ids must be a non-empty array"
+  else
+    errors << "overall_decision_source_ids contains unknown source" unless (overall_sources - source_ids).empty?
+  end
+
+  findings = decision["findings"]
+  findings = [] unless findings.is_a?(Array)
+  errors << "findings must be an array" unless decision["findings"].is_a?(Array)
+  finding_ids = findings.map { |item| item["finding_id"] }
+  errors << "finding decision IDs must be unique" unless finding_ids.uniq.length == finding_ids.length
+  errors << "finding decisions contain an ID outside required_finding_ids" unless (finding_ids - required_ids).empty?
+
+  dispositions = []
+  findings.each_with_index do |item, index|
+    unless item.is_a?(Hash)
+      errors << "finding decision #{index} must be a mapping"
+      next
+    end
+    finding_id = item["finding_id"]
+    match = FINDING_ID_PATTERN.match(finding_id.to_s)
+    errors << "finding decision #{index} has invalid Finding ID" unless match
+    disposition = item["disposition"]
+    dispositions << disposition
+    errors << "finding decision #{index} has invalid disposition" unless VALID_FINDING_DISPOSITION.include?(disposition)
+    owner_decision = item["owner_decision"]
+    errors << "finding decision #{index}.owner_decision must be a non-empty string" unless owner_decision.is_a?(String) && !owner_decision.empty?
+    errors << "finding decision #{index}.remediation_constraints must be an array" unless item["remediation_constraints"].is_a?(Array)
+
+    item_sources = item["decision_source_ids"]
+    unless item_sources.is_a?(Array) && !item_sources.empty?
+      errors << "finding decision #{index}.decision_source_ids must be non-empty"
+    else
+      errors << "finding decision #{index} references an unknown decision source" unless (item_sources - source_ids).empty?
+    end
+
+    if disposition == "deferred"
+      reason = item["deferred_reason"]
+      errors << "deferred finding #{finding_id} requires deferred_reason" unless reason.is_a?(String) && !reason.empty?
+      tracking = item["tracking_ref"]
+      if !tracking.nil? && (!tracking.is_a?(String) || tracking.empty?)
+        errors << "deferred finding #{finding_id}.tracking_ref must be null or non-empty"
+      end
+    end
+  end
+
+  if completion == "complete"
+    errors << "complete decision must cover every required Finding ID exactly once" unless finding_ids.sort == required_ids.sort
+    errors << "complete decision cannot contain unresolved finding dispositions" if dispositions.include?("unresolved")
+    errors << "complete decision cannot use deep_review_incomplete" if overall == "deep_review_incomplete"
+    errors << "complete decision cannot have unresolved spec_status" if spec_status == "unresolved"
+  end
+
+  errors << "deep_review_incomplete requires completion: partial" if overall == "deep_review_incomplete" && completion != "partial"
+
+  if overall == "approve"
+    errors << "approve requires spec_status still_valid" unless spec_status == "still_valid"
+    blocking = dispositions & %w[remediate spec_change_required unresolved]
+    errors << "approve cannot coexist with required remediation/spec change/unresolved findings" unless blocking.empty?
+  end
+
+  if dispositions.include?("spec_change_required")
+    errors << "spec_change_required requires spec_status change_required" unless spec_status == "change_required"
+    errors << "spec_change_required requires request_changes" unless overall == "request_changes"
+  end
+
+  if overall == "request_changes" && spec_status == "still_valid"
+    errors << "spec_review request_changes must return to Spec change" if decision["stage"] == "spec_review"
+    errors << "request_changes + still_valid requires at least one remediate finding" unless dispositions.include?("remediate")
+    errors << "request_changes + still_valid cannot contain spec_change_required" if dispositions.include?("spec_change_required")
+  end
+
+  if overall == "request_changes" && spec_status == "change_required"
+    errors << "request_changes + change_required requires a spec_change_required finding" unless dispositions.include?("spec_change_required")
+  end
+
+  errors
+end
+
+def validate_decision_record(decision, round, label)
+  errors = decision_record_errors(decision, round)
+  fail_contract("#{label}: #{errors.join("; ")}") unless errors.empty?
+end
+
+def decision_revision_errors(previous, current)
+  errors = []
+  errors << "revision must increment by one" unless current["revision"] == previous["revision"] + 1
+  errors << "supersedes_ref must equal previous record_ref" unless current["supersedes_ref"] == previous["record_ref"]
+  %w[repository pr review_round_ref review_head stage].each do |key|
+    errors << "#{key} changed across decision revisions" unless current[key] == previous[key]
+  end
+  errors << "record_ref must change across revisions" if current["record_ref"] == previous["record_ref"]
+  errors
+end
+
+def decision_route(decision, round)
+  return "blocked" unless decision_record_errors(decision, round).empty?
+  return "human_review" if decision["completion"] != "complete" || decision["overall_decision"] == "deep_review_incomplete" || decision["spec_status"] == "unresolved"
+
+  dispositions = decision["findings"].map { |item| item["disposition"] }
+  return "spec_loop" if decision["spec_status"] == "change_required" || dispositions.include?("spec_change_required")
+
+  if decision["stage"] == "spec_review" && decision["overall_decision"] == "approve"
+    return "tickets_or_implementation"
+  end
+
+  if decision["stage"] == "final_review" && decision["overall_decision"] == "approve"
+    return "closeout"
+  end
+
+  if decision["stage"] == "final_review" && decision["overall_decision"] == "request_changes" &&
+     decision["spec_status"] == "still_valid" && dispositions.include?("remediate")
+    return "implementation_remediation"
+  end
+
+  "blocked"
+end
+
+def gate_route_for_head(decision, round, current_head)
+  return "blocked" unless current_head == decision["review_head"]
+
+  decision_route(decision, round)
+end
+
+def continuation_errors(decision, round, current_head, descendant_pairs, progress)
+  errors = decision_record_errors(decision, round)
+  return errors unless errors.empty?
+
+  reviewed_head = decision["review_head"]
+  route = decision_route(decision, round)
+  allowed_routes = %w[tickets_or_implementation implementation_remediation spec_loop]
+  errors << "decision route is not resumable work" unless allowed_routes.include?(route)
+
+  descendant = descendant_pairs.include?([reviewed_head, current_head])
+  errors << "current head is not a proven descendant of reviewed head" unless descendant
+
+  unless progress.is_a?(Hash)
+    errors << "durable delivery progress is missing"
+    return errors
+  end
+
+  errors << "progress artifact must be delivery-progress" unless progress["artifact"] == "delivery-progress"
+  errors << "progress repository mismatch" unless progress["repository"] == round["repository"]
+  errors << "progress PR mismatch" unless progress["pr"] == round["pr"]
+  errors << "progress source_decision_ref mismatch" unless progress["source_decision_ref"] == decision["record_ref"]
+  errors << "progress route mismatch" unless progress["route"] == route
+  errors << "progress start_head mismatch" unless progress["start_head"] == reviewed_head
+  errors << "progress current_head mismatch" unless progress["current_head"] == current_head
+
+  status = progress["status"]
+  errors << "progress status invalid" unless VALID_PROGRESS_STATUS.include?(status)
+  if status == "ready_for_final_hrb" && !%w[tickets_or_implementation implementation_remediation].include?(route)
+    errors << "ready_for_final_hrb is only valid for implementation routes"
+  end
+  if status == "ready_for_spec_hrb" && route != "spec_loop"
+    errors << "ready_for_spec_hrb is only valid for spec_loop"
+  end
+  if route == "spec_loop" && status == "ready_for_final_hrb"
+    errors << "spec_loop cannot be ready_for_final_hrb"
+  end
+  if route != "spec_loop" && status == "ready_for_spec_hrb"
+    errors << "implementation routes cannot be ready_for_spec_hrb"
+  end
+
+  errors << "progress completed_slices must be an array" unless progress["completed_slices"].is_a?(Array)
+  errors << "progress pending_slices must be an array" unless progress["pending_slices"].is_a?(Array)
+  if %w[ready_for_final_hrb ready_for_spec_hrb].include?(status) &&
+     progress["pending_slices"].is_a?(Array) &&
+     !progress["pending_slices"].empty?
+    errors << "ready progress must have no pending_slices"
+  end
+
+  scope = progress["scope"]
+  unless scope.is_a?(Hash)
+    errors << "progress scope must be a mapping"
+    return errors
+  end
+
+  if route == "implementation_remediation"
+    remediate_ids = decision.fetch("findings", [])
+      .select { |item| item["disposition"] == "remediate" }
+      .map { |item| item["finding_id"] }
+    progress_ids = scope["finding_ids"]
+    errors << "remediation progress finding_ids must be an array" unless progress_ids.is_a?(Array)
+    if progress_ids.is_a?(Array)
+      errors << "remediation progress scope must exactly match Owner remediate findings" unless progress_ids.sort == remediate_ids.sort
+    end
+  elsif route == "tickets_or_implementation"
+    approved_spec_ref = scope["approved_spec_ref"]
+    errors << "implementation progress requires approved_spec_ref" unless approved_spec_ref.is_a?(String) && !approved_spec_ref.empty?
+    errors << "governing scope changed since Spec approval" unless scope["governing_scope_unchanged"] == true
+  elsif route == "spec_loop"
+    spec_change_ids = decision.fetch("findings", [])
+      .select { |item| item["disposition"] == "spec_change_required" }
+      .map { |item| item["finding_id"] }
+    progress_ids = scope["finding_ids"]
+    errors << "spec-loop progress finding_ids must be an array" unless progress_ids.is_a?(Array)
+    if progress_ids.is_a?(Array)
+      errors << "spec-loop progress scope must exactly match Owner spec_change_required findings" unless progress_ids.sort == spec_change_ids.sort
+    end
+    source_spec_ref = scope["source_spec_ref"]
+    errors << "spec-loop progress requires source_spec_ref" unless source_spec_ref.is_a?(String) && !source_spec_ref.empty?
+    errors << "spec-loop change scope drifted beyond Owner decision" unless scope["change_scope_unchanged"] == true
+  end
+
+  errors
+end
+
+def continuation_route(decision, round, current_head, descendant_pairs, progress)
+  errors = continuation_errors(decision, round, current_head, descendant_pairs, progress)
+  return ["blocked", errors] unless errors.empty?
+
+  route = decision_route(decision, round)
+  case progress["status"]
+  when "ready_for_final_hrb"
+    ["final_hrb", []]
+  when "ready_for_spec_hrb"
+    ["spec_hrb", []]
+  else
+    [route, []]
+  end
+end
+
+def recover_effective_decision(comments, round)
+  records, errors = recover_marked_records(comments, DECISION_RECORD_MARKER, "hrb-review-decision-record")
+  scoped = records.select do |record|
+    record["repository"] == round["repository"] &&
+      record["pr"] == round["pr"] &&
+      record["review_round_ref"] == round["record_ref"]
+  end
+
+  scoped.each do |record|
+    record_errors = decision_record_errors(record, round)
+    errors.concat(record_errors.map { |message| "#{record["record_ref"]}: #{message}" })
+  end
+
+  refs = scoped.map { |record| record["record_ref"] }
+  duplicate_refs = refs.group_by(&:itself).select { |_ref, values| values.length > 1 }.keys
+  errors << "duplicate decision record_ref values: #{duplicate_refs.join(", ")}" unless duplicate_refs.empty?
+
+  revisions = scoped.map { |record| record["revision"] }
+  duplicate_revisions = revisions.group_by(&:itself).select { |_revision, values| values.length > 1 }.keys
+  errors << "duplicate decision revisions: #{duplicate_revisions.join(", ")}" unless duplicate_revisions.empty?
+
+  refs_by_id = scoped.to_h { |record| [record["record_ref"], record] }
+
+  scoped.each do |record|
+    next if record["revision"] == 1
+
+    predecessor = refs_by_id[record["supersedes_ref"]]
+    unless predecessor
+      errors << "#{record["record_ref"]}: decision supersession predecessor missing"
+      next
+    end
+    revision_errors = decision_revision_errors(predecessor, record)
+    errors.concat(revision_errors.map { |message| "#{record["record_ref"]}: #{message}" })
+  end
+
+  # Validate the entire scope graph before selecting an effective record.
+  states = {}
+  visit = lambda do |record|
+    ref = record["record_ref"]
+    return if states[ref] == :done
+    if states[ref] == :visiting
+      errors << "decision supersession cycle detected at #{ref}"
+      return
+    end
+
+    states[ref] = :visiting
+    predecessor_ref = record["supersedes_ref"]
+    predecessor = predecessor_ref && refs_by_id[predecessor_ref]
+    visit.call(predecessor) if predecessor
+    states[ref] = :done
+  end
+  scoped.each { |record| visit.call(record) }
+
+  return [nil, errors] unless errors.empty?
+
+  superseded_refs = scoped.map { |record| record["supersedes_ref"] }.compact
+  effective = scoped.reject { |record| superseded_refs.include?(record["record_ref"]) }
+
+  if effective.length != 1
+    errors << "expected exactly one effective unsuperseded decision, got #{effective.length}"
+    return [nil, errors]
+  end
+
+  [effective.first, []]
+end
+
+def legacy_round_readable?(round)
+  round.is_a?(Hash) &&
+    round["schema_version"] == 1 &&
+    round["artifact"] == "hrb-review-round-record" &&
+    round["repository"].is_a?(String) &&
+    round["pr"].is_a?(Integer) &&
+    round["round"].is_a?(Integer) &&
+    round["fresh_review"].is_a?(Hash)
+end
+
 product_spec_path = "docs/HRB-0_PRODUCT_SPEC.md"
 skill_path = "SKILL.md"
 human_path = "HUMAN.md"
@@ -252,12 +935,16 @@ readme_path = "README.md"
 cases_path = "fixtures/hrb-0/cases.yaml"
 round1_path = "fixtures/hrb-0/review-round-record-round1.example.yaml"
 round2_path = "fixtures/hrb-0/review-round-record.example.yaml"
+round1_decision_path = "fixtures/hrb-0/review-decision-record-round1.example.yaml"
+partial_decision_path = "fixtures/hrb-0/review-decision-record-partial.example.yaml"
+decision_path = "fixtures/hrb-0/review-decision-record.example.yaml"
+payload_comments_path = "fixtures/hrb-0/review-payload-comments.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
 fresh_handoff_path = "handoffs/fresh-review.md"
 remediation_handoff_path = "handoffs/remediation-review.md"
 compiler_handoff_path = "handoffs/brief-compiler.md"
 
-[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
+[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, round1_decision_path, partial_decision_path, decision_path, payload_comments_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
@@ -436,6 +1123,104 @@ require_path(c13, "C13", %w[expected brief human_decision_required], true)
 require_includes(c13["must_not"], "treat a policy introduced by the current PR as active authority for that PR", "C13.must_not")
 require_includes(c13["must_not"], "let the introduced policy self-authorize the implementation change", "C13.must_not")
 
+c14 = by_id.fetch("C14_DURABLE_REVIEW_STATE")
+require_path(c14, "C14", %w[expected persistence round_marker], ROUND_RECORD_MARKER)
+require_path(c14, "C14", %w[expected persistence decision_marker], DECISION_RECORD_MARKER)
+require_path(c14, "C14", %w[expected persistence raw_findings_marker], RAW_FINDINGS_MARKER)
+require_path(c14, "C14", %w[expected persistence human_review_brief_marker], HUMAN_REVIEW_BRIEF_MARKER)
+require_path(c14, "C14", %w[expected persistence remediation_evidence_marker], REMEDIATION_EVIDENCE_MARKER)
+require_path(c14, "C14", %w[expected persistence discovery_ref], "github-pr-comments://lu90/example/pull/123")
+require_path(c14, "C14", %w[expected persistence stable_record_ref_required], true)
+require_path(c14, "C14", %w[expected persistence read_back_required], true)
+require_path(c14, "C14", %w[expected persistence referenced_payloads_must_resolve], true)
+require_path(c14, "C14", %w[expected persistence payload_content_must_be_non_null], true)
+require_path(c14, "C14", %w[expected persistence raw_finding_ids_must_match_round], true)
+require_path(c14, "C14", %w[expected persistence payload_type_minimum_body_validated], true)
+require_path(c14, "C14", %w[expected persistence review_head_unchanged], true)
+require_includes(c14["must_not"], "use artifact:// examples as proof of durable persistence", "C14.must_not")
+require_includes(c14["must_not"], "select effective state by comment timestamp alone", "C14.must_not")
+
+c15 = by_id.fetch("C15_PARTIAL_DECISION")
+require_path(c15, "C15", %w[expected decision completion], "partial")
+require_path(c15, "C15", %w[expected decision route], "human_review")
+require_path(c15, "C15", %w[expected decision missing_required_findings_allowed_while_partial], true)
+require_path(c15, "C15", %w[expected decision agent_may_fill_missing_decisions], false)
+
+c16 = by_id.fetch("C16_DECISION_ROUTING")
+require_path(c16, "C16", %w[expected routes spec_approve_still_valid], "tickets_or_implementation")
+require_path(c16, "C16", %w[expected routes final_approve_still_valid], "closeout")
+require_path(c16, "C16", %w[expected routes final_request_changes_still_valid], "implementation_remediation")
+require_path(c16, "C16", %w[expected routes request_changes_change_required], "spec_loop")
+require_path(c16, "C16", %w[expected routes deep_review_incomplete], "human_review")
+require_path(c16, "C16", %w[expected preserve_authorization_gates], true)
+
+c17 = by_id.fetch("C17_FINDING_CONTINUITY")
+%w[
+  preserve_original_finding_id
+  source_round_ref_required
+  inherited_ids_must_be_in_prior_lineage
+  decision_scope_includes_inherited_ids
+  zero_new_fresh_findings_may_still_have_inherited_scope
+  machine_status_separate_from_owner_disposition
+  required_prior_owner_actions_must_carry_forward
+  source_round_must_own_finding
+  source_round_must_share_repository_pr_base_lineage
+].each { |key| require_path(c17, "C17", ["expected", "continuity", key], true) }
+require_includes(c17["must_not"], "renumber an inherited finding to the current round", "C17.must_not")
+require_includes(c17["must_not"], "silently discard a prior unresolved finding", "C17.must_not")
+
+c18 = by_id.fetch("C18_DECISION_SOURCE")
+require_path(c18, "C18", %w[expected source decided_by_and_recorded_by_distinct_fields], true)
+require_path(c18, "C18", %w[expected source captured_human_statement_required], true)
+require_path(c18, "C18", %w[expected source ordinary_discussion_is_approval], false)
+require_path(c18, "C18", %w[expected source agent_inference_is_approval], false)
+
+c19 = by_id.fetch("C19_IMPLEMENTATION_REPORT_GATE")
+require_path(c19, "C19", %w[expected final_review stale_report_blocks], true)
+require_path(c19, "C19", %w[expected final_review return_to_report_update], true)
+require_path(c19, "C19", %w[expected final_review report_committed_before_head_is_pinned_when_tracked], true)
+require_path(c19, "C19", %w[expected spec_review missing_report_blocks], false)
+require_path(c19, "C19", %w[expected isolation full_report_visible_to_fresh_reviewer], false)
+require_path(c19, "C19", %w[expected isolation full_report_available_to_compiler], true)
+require_path(c19, "C19", %w[expected isolation indirect_prior_review_material_removed], true)
+
+c20 = by_id.fetch("C20_HEAD_INVALIDATION")
+require_path(c20, "C20", %w[expected decision valid_as_new_head_approval], false)
+require_path(c20, "C20", %w[expected decision gate_route], "blocked")
+require_path(c20, "C20", %w[expected decision continuation_route], "implementation_remediation")
+require_path(c20, "C20", %w[expected decision spec_loop_continuation_supported], true)
+require_path(c20, "C20", %w[expected decision ready_for_final_hrb_routes_to], "final_hrb")
+require_path(c20, "C20", %w[expected decision ready_for_spec_hrb_routes_to], "spec_hrb")
+require_path(c20, "C20", %w[expected decision continuation_requires_descendant_head], true)
+require_path(c20, "C20", %w[expected decision continuation_requires_durable_progress], true)
+require_path(c20, "C20", %w[expected decision continuation_requires_scope_match], true)
+
+c21 = by_id.fetch("C21_RECOVERY_IDEMPOTENCE")
+%w[
+  discover_by_repository_and_pr
+  explicit_supersession_chain_required
+  actual_comment_parser_exercised
+  payload_reference_resolution_exercised
+  effective_decision_recovery_exercised
+  whole_scope_revision_graph_validated
+  hidden_cycle_rejected
+  duplicate_record_write_avoided
+  completed_step_not_repeated
+  duplicate_external_write_avoided
+].each { |key| require_path(c21, "C21", ["expected", "recovery", key], true) }
+
+c22 = by_id.fetch("C22_AUTHORIZATION_BOUNDARY")
+require_path(c22, "C22", %w[expected routing next_phase], "closeout")
+require_path(c22, "C22", %w[expected routing merge_authorized_by_hrb], false)
+require_path(c22, "C22", %w[expected routing tracker_write_authorized_by_hrb], false)
+require_path(c22, "C22", %w[expected routing follow_up_issue_requires_tracker_and_write_authorization], true)
+
+c23 = by_id.fetch("C23_LEGACY_COMPATIBILITY")
+require_path(c23, "C23", %w[expected compatibility round_record_readable], true)
+require_path(c23, "C23", %w[expected compatibility automatic_historical_approval_created], false)
+require_path(c23, "C23", %w[expected compatibility engineering_route_without_decision], "blocked")
+require_includes(c23["must_not"], "invent a Review Decision Record for an old round", "C23.must_not")
+
 validate_handoff_template(
   fresh_handoff_path,
   "reviewer",
@@ -444,6 +1229,7 @@ validate_handoff_template(
     repository
     pr
     round
+    review_stage
     base_sha
     current_head_sha
     originating_spec_refs
@@ -460,6 +1246,8 @@ validate_handoff_template(
     prior_human_review_briefs
     prior_human_decisions
     prior_round_design_summaries
+    full_implementation_report
+    prior_review_material_from_indirect_inputs
   ]
 )
 
@@ -475,6 +1263,7 @@ validate_handoff_template(
     previous_review_head
     current_head_sha
     prior_round_record
+    prior_review_decision_record
     prior_findings
     remediation_delta
     deterministic_verification_refs
@@ -497,6 +1286,7 @@ validate_handoff_template(
     repository
     pr
     round
+    review_stage
     base_sha
     current_head_sha
     previous_review_head
@@ -509,6 +1299,7 @@ validate_handoff_template(
     evidence_refs
     deterministic_verification_refs
     spec_ticket_refs
+    implementation_report
   ],
   %w[
     implementation_conversation
@@ -521,21 +1312,320 @@ validate_handoff_template(
 
 round1 = YAML.safe_load(File.read(round1_path), aliases: false)
 round2 = YAML.safe_load(File.read(round2_path), aliases: false)
+round1_decision = YAML.safe_load(File.read(round1_decision_path), aliases: false)
+partial_decision = YAML.safe_load(File.read(partial_decision_path), aliases: false)
+decision = YAML.safe_load(File.read(decision_path), aliases: false)
+payload_comment_suite = YAML.safe_load(File.read(payload_comments_path), aliases: false)
+payload_comments = payload_comment_suite["comments"]
+
 fail_contract("round-1 example must use round: 1") unless round1["round"] == 1
 fail_contract("round-2+ example must use round >= 2") unless round2["round"].is_a?(Integer) && round2["round"] >= 2
 validate_round_record(round1, "round-1 example")
 validate_round_record(round2, "round-2 example")
+validate_decision_record(round1_decision, round1, "round-1 decision example")
 validate_round_transition(round1, round2, "round-1 -> round-2 transition")
+validate_round_lineage(round1, round2, round1_decision, [round1], "round-1 -> round-2 lineage")
+
+# Exercise actual PR-comment payload parsing and reference resolution for both canonical rounds.
+round1_payload_errors = resolve_round_payloads(round1, payload_comments)
+fail_contract("round-1 payload recovery failed: #{round1_payload_errors.join("; ")}") unless round1_payload_errors.empty?
+payload_errors = resolve_round_payloads(round2, payload_comments)
+fail_contract("round-2 payload recovery failed: #{payload_errors.join("; ")}") unless payload_errors.empty?
+
+missing_payload_comments = payload_comments.reject { |comment| comment["body"].include?("hrb-raw-findings:v1") }
+missing_payload_errors = resolve_round_payloads(round2, missing_payload_comments)
+fail_contract("negative payload recovery check: missing Raw Findings payload was accepted") if missing_payload_errors.empty?
+
+raw_ref = round2.dig("fresh_review", "raw_findings_ref")
+raw_payload, raw_lookup_errors = recover_record_by_ref(
+  payload_comments,
+  RAW_FINDINGS_MARKER,
+  "hrb-review-payload",
+  raw_ref
+)
+fail_contract("raw payload fixture lookup failed: #{raw_lookup_errors.join("; ")}") unless raw_lookup_errors.empty?
+
+null_raw_payload = deep_copy(raw_payload)
+null_raw_payload["content"] = nil
+null_raw_comments = payload_comments.map do |comment|
+  comment["body"].include?(raw_ref) ? render_yaml_comment(RAW_FINDINGS_MARKER, null_raw_payload) : comment
+end
+null_raw_errors = resolve_round_payloads(round2, null_raw_comments)
+fail_contract("negative payload content check: content:null was accepted") unless null_raw_errors.any? { |error| error.include?("non-null mapping") }
+
+omitted_raw_payload = deep_copy(raw_payload)
+omitted_raw_payload["content"]["findings"].pop
+omitted_raw_comments = payload_comments.map do |comment|
+  comment["body"].include?(raw_ref) ? render_yaml_comment(RAW_FINDINGS_MARKER, omitted_raw_payload) : comment
+end
+omitted_raw_errors = resolve_round_payloads(round2, omitted_raw_comments)
+fail_contract("negative payload content check: missing Raw Finding ID was accepted") unless omitted_raw_errors.any? { |error| error.include?("exactly match") }
+
+brief_ref = round2.dig("brief", "brief_ref")
+brief_payload, brief_lookup_errors = recover_record_by_ref(
+  payload_comments,
+  HUMAN_REVIEW_BRIEF_MARKER,
+  "hrb-review-payload",
+  brief_ref
+)
+fail_contract("brief payload fixture lookup failed: #{brief_lookup_errors.join("; ")}") unless brief_lookup_errors.empty?
+empty_brief_payload = deep_copy(brief_payload)
+empty_brief_payload["content"]["markdown"] = "   "
+empty_brief_comments = payload_comments.map do |comment|
+  comment["body"].include?(brief_ref) ? render_yaml_comment(HUMAN_REVIEW_BRIEF_MARKER, empty_brief_payload) : comment
+end
+empty_brief_errors = resolve_round_payloads(round2, empty_brief_comments)
+fail_contract("negative payload content check: empty Human Review Brief was accepted") unless empty_brief_errors.any? { |error| error.include?("markdown must be non-empty") }
+
+remediation_ref = round2.dig("remediation_verification", "results", 0, "evidence_ref")
+remediation_payload, remediation_lookup_errors = recover_record_by_ref(
+  payload_comments,
+  REMEDIATION_EVIDENCE_MARKER,
+  "hrb-review-payload",
+  remediation_ref
+)
+fail_contract("remediation payload fixture lookup failed: #{remediation_lookup_errors.join("; ")}") unless remediation_lookup_errors.empty?
+bad_remediation_payload = deep_copy(remediation_payload)
+bad_remediation_payload["content"]["status"] = "unresolved"
+bad_remediation_comments = payload_comments.map do |comment|
+  comment["body"].include?(remediation_ref) ? render_yaml_comment(REMEDIATION_EVIDENCE_MARKER, bad_remediation_payload) : comment
+end
+bad_remediation_errors = resolve_round_payloads(round2, bad_remediation_comments)
+fail_contract("negative payload content check: remediation status mismatch was accepted") unless bad_remediation_errors.any? { |error| error.include?("status mismatch") }
+
+# Exercise actual Round Record comment parsing.
+round_comment = render_yaml_comment(ROUND_RECORD_MARKER, round2)
+recovered_round, recovered_round_errors = recover_record_by_ref(
+  [round_comment],
+  ROUND_RECORD_MARKER,
+  "hrb-review-round-record",
+  round2["record_ref"]
+)
+fail_contract("round comment recovery failed: #{recovered_round_errors.join("; ")}") unless recovered_round_errors.empty? && recovered_round == round2
+
+# Exercise actual Decision Record recovery and explicit supersession traversal.
+validate_decision_record(partial_decision, round2, "partial decision example")
+validate_decision_record(decision, round2, "complete decision example")
+revision_errors = decision_revision_errors(partial_decision, decision)
+fail_contract("decision revision example invalid: #{revision_errors.join("; ")}") unless revision_errors.empty?
+
+decision_comments = [
+  render_yaml_comment(DECISION_RECORD_MARKER, partial_decision),
+  render_yaml_comment(DECISION_RECORD_MARKER, decision)
+]
+effective_decision, recovery_errors = recover_effective_decision(decision_comments, round2)
+fail_contract("effective decision recovery failed: #{recovery_errors.join("; ")}") unless recovery_errors.empty? && effective_decision == decision
+
+cycle_a = deep_copy(decision)
+cycle_b = deep_copy(decision)
+cycle_a["record_ref"] = "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-10@3333333333333333333333333333333333333333"
+cycle_a["revision"] = 10
+cycle_a["supersedes_ref"] = "hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-11@3333333333333333333333333333333333333333"
+cycle_b["record_ref"] = cycle_a["supersedes_ref"]
+cycle_b["revision"] = 11
+cycle_b["supersedes_ref"] = cycle_a["record_ref"]
+cycle_comments = decision_comments + [
+  render_yaml_comment(DECISION_RECORD_MARKER, cycle_a),
+  render_yaml_comment(DECISION_RECORD_MARKER, cycle_b)
+]
+_cycle_effective, cycle_errors = recover_effective_decision(cycle_comments, round2)
+fail_contract("negative revision recovery check: hidden supersession cycle was ignored") unless cycle_errors.any? { |error| error.include?("cycle detected") }
+
+fail_contract("partial decision must route to human_review") unless decision_route(partial_decision, round2) == "human_review"
+fail_contract("complete decision example must route to implementation_remediation") unless decision_route(decision, round2) == "implementation_remediation"
+
+final_approve = deep_copy(decision)
+final_approve["overall_decision"] = "approve"
+final_approve["spec_status"] = "still_valid"
+final_approve["findings"].each { |item| item["disposition"] = "accepted"; item["owner_decision"] = "Accepted for delivery." }
+validate_decision_record(final_approve, round2, "final approve route")
+fail_contract("final approve must route to closeout") unless decision_route(final_approve, round2) == "closeout"
+
+spec_round = deep_copy(round2)
+spec_round["review_stage"] = "spec_review"
+spec_approve = deep_copy(final_approve)
+spec_approve["stage"] = "spec_review"
+validate_decision_record(spec_approve, spec_round, "spec approve route")
+fail_contract("spec approve must route to tickets_or_implementation") unless decision_route(spec_approve, spec_round) == "tickets_or_implementation"
+
+spec_change = deep_copy(decision)
+spec_change["overall_decision"] = "request_changes"
+spec_change["spec_status"] = "change_required"
+spec_change["findings"].each { |item| item["disposition"] = "accepted"; item["owner_decision"] = "Accepted unless changed below." }
+spec_change["findings"].first["disposition"] = "spec_change_required"
+spec_change["findings"].first["owner_decision"] = "Change the governing Spec before implementation."
+validate_decision_record(spec_change, round2, "spec change route")
+fail_contract("request_changes + change_required must route to spec_loop") unless decision_route(spec_change, round2) == "spec_loop"
+
+# Old-head decisions cannot approve a new head, but can resume explicitly authorized descendant work.
+advanced_head = "4444444444444444444444444444444444444444"
+fail_contract("old-head decision incorrectly approved advanced head") unless gate_route_for_head(decision, round2, advanced_head) == "blocked"
+
+remediation_progress = {
+  "artifact" => "delivery-progress",
+  "repository" => round2["repository"],
+  "pr" => round2["pr"],
+  "source_decision_ref" => decision["record_ref"],
+  "route" => "implementation_remediation",
+  "start_head" => decision["review_head"],
+  "current_head" => advanced_head,
+  "status" => "in_progress",
+  "scope" => {
+    "finding_ids" => %w[R2-RF-01 R2-RF-02]
+  },
+  "completed_slices" => ["R2-RF-01"],
+  "pending_slices" => ["R2-RF-02"]
+}
+continuation, continuation_errors_list = continuation_route(
+  decision,
+  round2,
+  advanced_head,
+  [[decision["review_head"], advanced_head]],
+  remediation_progress
+)
+fail_contract("valid remediation continuation failed: #{continuation_errors_list.join("; ")}") unless continuation == "implementation_remediation" && continuation_errors_list.empty?
+
+bad_progress = deep_copy(remediation_progress)
+bad_progress["source_decision_ref"] = "hrb://github/lu90/example/pull/123/decision/unrelated"
+bad_route, bad_route_errors = continuation_route(
+  decision,
+  round2,
+  advanced_head,
+  [[decision["review_head"], advanced_head]],
+  bad_progress
+)
+fail_contract("negative continuation check: mismatched source decision was accepted") unless bad_route == "blocked" && !bad_route_errors.empty?
+
+spec_progress = {
+  "artifact" => "delivery-progress",
+  "repository" => spec_round["repository"],
+  "pr" => spec_round["pr"],
+  "source_decision_ref" => spec_approve["record_ref"],
+  "route" => "tickets_or_implementation",
+  "start_head" => spec_approve["review_head"],
+  "current_head" => advanced_head,
+  "status" => "in_progress",
+  "scope" => {
+    "approved_spec_ref" => "docs/spec.md@#{spec_approve["review_head"]}",
+    "governing_scope_unchanged" => true
+  },
+  "completed_slices" => ["ticket-1"],
+  "pending_slices" => ["ticket-2"]
+}
+spec_continuation, spec_continuation_errors = continuation_route(
+  spec_approve,
+  spec_round,
+  advanced_head,
+  [[spec_approve["review_head"], advanced_head]],
+  spec_progress
+)
+fail_contract("valid Spec-approved implementation continuation failed: #{spec_continuation_errors.join("; ")}") unless spec_continuation == "tickets_or_implementation" && spec_continuation_errors.empty?
+
+ready_final_progress = deep_copy(remediation_progress)
+ready_final_progress["status"] = "ready_for_final_hrb"
+ready_final_progress["completed_slices"] = %w[R2-RF-01 R2-RF-02]
+ready_final_progress["pending_slices"] = []
+ready_final_route, ready_final_errors = continuation_route(
+  decision,
+  round2,
+  advanced_head,
+  [[decision["review_head"], advanced_head]],
+  ready_final_progress
+)
+fail_contract("ready_for_final_hrb did not resume at Final HRB: #{ready_final_errors.join("; ")}") unless ready_final_route == "final_hrb" && ready_final_errors.empty?
+
+spec_loop_progress = {
+  "artifact" => "delivery-progress",
+  "repository" => round2["repository"],
+  "pr" => round2["pr"],
+  "source_decision_ref" => spec_change["record_ref"],
+  "route" => "spec_loop",
+  "start_head" => spec_change["review_head"],
+  "current_head" => advanced_head,
+  "status" => "in_progress",
+  "scope" => {
+    "finding_ids" => ["R2-RF-01"],
+    "source_spec_ref" => "docs/spec.md@#{spec_change["review_head"]}",
+    "change_scope_unchanged" => true
+  },
+  "completed_slices" => ["revise-requirement"],
+  "pending_slices" => ["update-acceptance-criteria"]
+}
+spec_loop_route, spec_loop_errors = continuation_route(
+  spec_change,
+  round2,
+  advanced_head,
+  [[spec_change["review_head"], advanced_head]],
+  spec_loop_progress
+)
+fail_contract("valid Spec Loop continuation failed: #{spec_loop_errors.join("; ")}") unless spec_loop_route == "spec_loop" && spec_loop_errors.empty?
+
+ready_spec_progress = deep_copy(spec_loop_progress)
+ready_spec_progress["status"] = "ready_for_spec_hrb"
+ready_spec_progress["completed_slices"] = ["revise-requirement", "update-acceptance-criteria"]
+ready_spec_progress["pending_slices"] = []
+ready_spec_route, ready_spec_errors = continuation_route(
+  spec_change,
+  round2,
+  advanced_head,
+  [[spec_change["review_head"], advanced_head]],
+  ready_spec_progress
+)
+fail_contract("ready_for_spec_hrb did not resume at Spec HRB: #{ready_spec_errors.join("; ")}") unless ready_spec_route == "spec_hrb" && ready_spec_errors.empty?
+
+wrong_ready_state = deep_copy(spec_loop_progress)
+wrong_ready_state["status"] = "ready_for_final_hrb"
+wrong_ready_route, wrong_ready_errors = continuation_route(
+  spec_change,
+  round2,
+  advanced_head,
+  [[spec_change["review_head"], advanced_head]],
+  wrong_ready_state
+)
+fail_contract("negative progress-state check: Spec Loop accepted ready_for_final_hrb") unless wrong_ready_route == "blocked" && !wrong_ready_errors.empty?
 
 # Exercise valid zero-finding lineage without replacing the canonical non-empty transition.
 zero_previous = deep_copy(round1)
 zero_previous["fresh_review"]["finding_ids"] = []
 zero_previous["fresh_review"]["coverage_manifest"] = DIMENSIONS.to_h { |dimension| [dimension, "reviewed_no_finding"] }
+zero_previous["finding_continuity"]["decision_scope_finding_ids"] = []
 zero_current = deep_copy(round2)
 zero_current["remediation_verification"]["results"] = []
+zero_current["finding_continuity"]["inherited"] = []
+zero_current["finding_continuity"]["decision_scope_finding_ids"] = zero_current["fresh_review"]["finding_ids"]
 validate_round_record(zero_previous, "zero-finding previous round")
 validate_round_record(zero_current, "zero-finding current round")
 validate_round_transition(zero_previous, zero_current, "zero-finding transition")
+
+# A later round may have no new Fresh Findings while carrying a prior unresolved/remediation-required Finding.
+no_new_fresh = deep_copy(round2)
+no_new_fresh["fresh_review"]["finding_ids"] = []
+no_new_fresh["fresh_review"]["coverage_manifest"] = DIMENSIONS.to_h { |dimension| [dimension, "reviewed_no_finding"] }
+no_new_fresh["remediation_verification"]["results"].first["status"] = "unresolved"
+no_new_fresh["finding_continuity"]["inherited"].first["remediation_status"] = "unresolved"
+no_new_fresh["finding_continuity"]["decision_scope_finding_ids"] = ["R1-RF-01"]
+validate_round_record(no_new_fresh, "no-new-fresh inherited round")
+validate_round_lineage(round1, no_new_fresh, round1_decision, [round1], "no-new-fresh inherited lineage")
+
+# Negative: an invalid prior Decision cannot suppress carry-forward.
+forged_prior_decision = deep_copy(round1_decision)
+forged_prior_decision["review_head"] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+forged_prior_decision["findings"].first["disposition"] = "accepted"
+forged_prior_errors = round_lineage_errors(round1, no_new_fresh, forged_prior_decision, [round1])
+fail_contract("negative lineage check: invalid prior Decision was trusted") unless forged_prior_errors.any? { |error| error.include?("prior decision invalid") }
+
+# Negative: remediation result remains unresolved, but the required prior Finding is deliberately omitted.
+omitted_carry = deep_copy(no_new_fresh)
+omitted_carry["finding_continuity"]["inherited"] = []
+omitted_carry["finding_continuity"]["decision_scope_finding_ids"] = []
+omitted_carry_errors = round_lineage_errors(round1, omitted_carry, round1_decision, [round1])
+fail_contract("negative lineage check: remediation-required prior Finding disappeared without rejection") unless omitted_carry_errors.any? { |error| error.include?("missing from carry-forward") }
+
+# Negative: source_round_ref points outside the actual review lineage.
+foreign_source = deep_copy(no_new_fresh)
+foreign_source["finding_continuity"]["inherited"].first["source_round_ref"] = "hrb://github/other/repo/pull/999/review-round/1@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+foreign_source_errors = round_lineage_errors(round1, foreign_source, round1_decision, [round1])
+fail_contract("negative lineage check: foreign source_round_ref was accepted") unless foreign_source_errors.any? { |error| error.include?("outside the supplied lineage") }
 
 # Exercise negative transition paths through the same deterministic function.
 wrong_ref = deep_copy(round2)
@@ -551,6 +1641,34 @@ duplicate_result = deep_copy(round2)
 duplicate_result["remediation_verification"]["results"] << deep_copy(duplicate_result["remediation_verification"]["results"].first)
 duplicate_errors = round_transition_errors(round1, duplicate_result)
 fail_contract("negative transition check: duplicate remediation result was accepted") unless duplicate_errors.include?("remediation result IDs must be unique")
+
+unknown_finding = deep_copy(decision)
+unknown_finding["required_finding_ids"] << "R9-RF-99"
+fail_contract("negative decision check: unknown Finding ID was accepted") if decision_record_errors(unknown_finding, round2).empty?
+
+stale_head = deep_copy(decision)
+stale_head["review_head"] = advanced_head
+fail_contract("negative decision check: Decision Record no longer matches its own reviewed head") if decision_record_errors(stale_head, round2).empty?
+
+missing_source = deep_copy(decision)
+missing_source["decision_sources"].first["captured_statement"] = ""
+fail_contract("negative decision check: missing human statement was accepted") if decision_record_errors(missing_source, round2).empty?
+
+contradictory = deep_copy(decision)
+contradictory["overall_decision"] = "approve"
+fail_contract("negative decision check: approve + remediate contradiction was accepted") if decision_record_errors(contradictory, round2).empty?
+
+wrong_supersession = deep_copy(decision)
+wrong_supersession["supersedes_ref"] = "hrb://github/lu90/example/pull/123/decision/unrelated"
+fail_contract("negative decision revision check: wrong supersedes_ref was accepted") if decision_revision_errors(partial_decision, wrong_supersession).empty?
+
+legacy_round = deep_copy(round1)
+legacy_round.delete("storage")
+legacy_round.delete("payload_storage")
+legacy_round.delete("review_stage")
+legacy_round.delete("finding_continuity")
+fail_contract("legacy compatibility check: old Review Round Record became unreadable") unless legacy_round_readable?(legacy_round)
+fail_contract("legacy compatibility check: missing Decision Record must not route") unless decision_route({}, round1) == "blocked"
 
 policy_text = File.read(policy_path)
 fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")

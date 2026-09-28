@@ -38,5 +38,17 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
 - `C12_HANDOFF_INPUT_ISOLATION` — Fresh Reviewer handoffs are canonical, whitelist-only, and deny prior-review/implementation context.
 - `C13_POLICY_INTRODUCED_SAME_PR` — a review policy introduced by the current PR is evidence only and cannot authorize that same PR.
+- `C14_DURABLE_REVIEW_STATE` — Review Round/Decision state is discoverable through marked PR comments without moving the reviewed head.
+- `C15_PARTIAL_DECISION` — partial human decisions are recoverable but non-routable.
+- `C16_DECISION_ROUTING` — valid Spec/Final decisions route deterministically.
+- `C17_FINDING_CONTINUITY` — inherited Finding IDs remain linked across rounds even when Fresh Review finds nothing new.
+- `C18_DECISION_SOURCE` — Agent inference cannot substitute for an explicit recoverable human statement.
+- `C19_IMPLEMENTATION_REPORT_GATE` — Final HRB requires a current Implementation Report while Spec HRB does not.
+- `C20_HEAD_INVALIDATION` — old-head approval cannot approve a new head, while proven descendant work can resume through route-specific durable progress, including Spec Loop and HRB-ready states.
+- `C21_RECOVERY_IDEMPOTENCE` — restart recovery validates the whole Decision revision graph, payload bodies, and duplicate-write avoidance.
+- `C22_AUTHORIZATION_BOUNDARY` — HRB approval does not grant merge/tracker/comment authorization.
+- `C23_LEGACY_COMPATIBILITY` — legacy Round Records remain readable but cannot synthesize missing human approval.
 
-The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+. The paired round examples exercise a non-empty remediation transition; deterministic self-checks also cover the valid empty transition plus missing-result and duplicate-result rejection.
+The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+, plus prior/partial/complete Review Decision Record examples. `review-payload-comments.example.yaml` contains actual marked PR-comment bodies for Raw Findings, Human Review Briefs, and remediation evidence.
+
+Deterministic self-checks execute the recovery functions rather than only checking expected fixture booleans: they parse marked comment YAML; require non-null type-specific payload bodies; verify Raw Finding IDs against the Round Record; validate remediation payload correspondence; validate the entire Decision revision graph and reject hidden cycles; distinguish exact-head gate authority from descendant-head work continuation; resume implementation/remediation/Spec Loop work; route `ready_for_final_hrb` to Final HRB and `ready_for_spec_hrb` to Spec HRB; validate prior-Decision-driven carry-forward; reject omitted unresolved/remediation-required Findings; and reject foreign/non-owning `source_round_ref` values. They also retain the earlier transition, contradiction, stale-head, and legacy fail-closed checks.
