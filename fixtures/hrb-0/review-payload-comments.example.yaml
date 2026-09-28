@@ -7,6 +7,42 @@ comments:
       schema_version: 1
       artifact: hrb-review-payload
       payload_type: raw_findings
+      record_ref: "hrb://github/lu90/example/pull/123/review-round/1/raw-findings@2222222222222222222222222222222222222222"
+      repository: lu90/example
+      pr: 123
+      review_round_ref: "hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222"
+      review_head: "2222222222222222222222222222222222222222"
+      content:
+        findings:
+          - finding_id: R1-RF-01
+            claim: "The prior-round issue requires remediation."
+            evidence:
+              - "src/example.rb:5-9"
+      ```
+
+  - body: |
+      <!-- hrb-human-review-brief:v1 -->
+      ```yaml
+      schema_version: 1
+      artifact: hrb-review-payload
+      payload_type: human_review_brief
+      record_ref: "hrb://github/lu90/example/pull/123/review-round/1/human-review-brief@2222222222222222222222222222222222222222"
+      repository: lu90/example
+      pr: 123
+      review_round_ref: "hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222"
+      review_head: "2222222222222222222222222222222222222222"
+      content:
+        markdown: |
+          # Human Review Brief
+          R1-RF-01 requires Owner review.
+      ```
+
+  - body: |
+      <!-- hrb-raw-findings:v1 -->
+      ```yaml
+      schema_version: 1
+      artifact: hrb-review-payload
+      payload_type: raw_findings
       record_ref: "hrb://github/lu90/example/pull/123/review-round/2/raw-findings@3333333333333333333333333333333333333333"
       repository: lu90/example
       pr: 123
