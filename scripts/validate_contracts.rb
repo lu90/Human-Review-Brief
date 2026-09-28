@@ -713,6 +713,82 @@ require_path(c13, "C13", %w[expected brief human_decision_required], true)
 require_includes(c13["must_not"], "treat a policy introduced by the current PR as active authority for that PR", "C13.must_not")
 require_includes(c13["must_not"], "let the introduced policy self-authorize the implementation change", "C13.must_not")
 
+c14 = by_id.fetch("C14_DURABLE_REVIEW_STATE")
+require_path(c14, "C14", %w[expected persistence round_marker], ROUND_RECORD_MARKER)
+require_path(c14, "C14", %w[expected persistence decision_marker], DECISION_RECORD_MARKER)
+require_path(c14, "C14", %w[expected persistence discovery_ref], "github-pr-comments://lu90/example/pull/123")
+require_path(c14, "C14", %w[expected persistence stable_record_ref_required], true)
+require_path(c14, "C14", %w[expected persistence read_back_required], true)
+require_path(c14, "C14", %w[expected persistence review_head_unchanged], true)
+require_includes(c14["must_not"], "use artifact:// examples as proof of durable persistence", "C14.must_not")
+require_includes(c14["must_not"], "select effective state by comment timestamp alone", "C14.must_not")
+
+c15 = by_id.fetch("C15_PARTIAL_DECISION")
+require_path(c15, "C15", %w[expected decision completion], "partial")
+require_path(c15, "C15", %w[expected decision route], "human_review")
+require_path(c15, "C15", %w[expected decision missing_required_findings_allowed_while_partial], true)
+require_path(c15, "C15", %w[expected decision agent_may_fill_missing_decisions], false)
+
+c16 = by_id.fetch("C16_DECISION_ROUTING")
+require_path(c16, "C16", %w[expected routes spec_approve_still_valid], "tickets_or_implementation")
+require_path(c16, "C16", %w[expected routes final_approve_still_valid], "closeout")
+require_path(c16, "C16", %w[expected routes final_request_changes_still_valid], "implementation_remediation")
+require_path(c16, "C16", %w[expected routes request_changes_change_required], "spec_loop")
+require_path(c16, "C16", %w[expected routes deep_review_incomplete], "human_review")
+require_path(c16, "C16", %w[expected preserve_authorization_gates], true)
+
+c17 = by_id.fetch("C17_FINDING_CONTINUITY")
+%w[
+  preserve_original_finding_id
+  source_round_ref_required
+  inherited_ids_must_be_in_prior_lineage
+  decision_scope_includes_inherited_ids
+  zero_new_fresh_findings_may_still_have_inherited_scope
+  machine_status_separate_from_owner_disposition
+].each { |key| require_path(c17, "C17", ["expected", "continuity", key], true) }
+require_includes(c17["must_not"], "renumber an inherited finding to the current round", "C17.must_not")
+require_includes(c17["must_not"], "silently discard a prior unresolved finding", "C17.must_not")
+
+c18 = by_id.fetch("C18_DECISION_SOURCE")
+require_path(c18, "C18", %w[expected source decided_by_and_recorded_by_distinct_fields], true)
+require_path(c18, "C18", %w[expected source captured_human_statement_required], true)
+require_path(c18, "C18", %w[expected source ordinary_discussion_is_approval], false)
+require_path(c18, "C18", %w[expected source agent_inference_is_approval], false)
+
+c19 = by_id.fetch("C19_IMPLEMENTATION_REPORT_GATE")
+require_path(c19, "C19", %w[expected final_review stale_report_blocks], true)
+require_path(c19, "C19", %w[expected final_review return_to_report_update], true)
+require_path(c19, "C19", %w[expected final_review report_committed_before_head_is_pinned_when_tracked], true)
+require_path(c19, "C19", %w[expected spec_review missing_report_blocks], false)
+require_path(c19, "C19", %w[expected isolation full_report_visible_to_fresh_reviewer], false)
+require_path(c19, "C19", %w[expected isolation full_report_available_to_compiler], true)
+require_path(c19, "C19", %w[expected isolation indirect_prior_review_material_removed], true)
+
+c20 = by_id.fetch("C20_HEAD_INVALIDATION")
+require_path(c20, "C20", %w[expected decision valid_for_current_head], false)
+require_path(c20, "C20", %w[expected decision route], "human_review")
+
+c21 = by_id.fetch("C21_RECOVERY_IDEMPOTENCE")
+%w[
+  discover_by_repository_and_pr
+  explicit_supersession_chain_required
+  duplicate_record_write_avoided
+  completed_step_not_repeated
+  duplicate_external_write_avoided
+].each { |key| require_path(c21, "C21", ["expected", "recovery", key], true) }
+
+c22 = by_id.fetch("C22_AUTHORIZATION_BOUNDARY")
+require_path(c22, "C22", %w[expected routing next_phase], "closeout")
+require_path(c22, "C22", %w[expected routing merge_authorized_by_hrb], false)
+require_path(c22, "C22", %w[expected routing tracker_write_authorized_by_hrb], false)
+require_path(c22, "C22", %w[expected routing follow_up_issue_requires_tracker_and_write_authorization], true)
+
+c23 = by_id.fetch("C23_LEGACY_COMPATIBILITY")
+require_path(c23, "C23", %w[expected compatibility round_record_readable], true)
+require_path(c23, "C23", %w[expected compatibility automatic_historical_approval_created], false)
+require_path(c23, "C23", %w[expected compatibility engineering_route_without_decision], "blocked")
+require_includes(c23["must_not"], "invent a Review Decision Record for an old round", "C23.must_not")
+
 validate_handoff_template(
   fresh_handoff_path,
   "reviewer",
