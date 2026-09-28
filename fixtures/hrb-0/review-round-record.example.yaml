@@ -1,8 +1,13 @@
 schema_version: 1
 artifact: hrb-review-round-record
-record_ref: "artifact://review-round-2"
+record_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  marker: "hrb-review-round-record:v1"
 repository: lu90/example
 pr: 123
+review_stage: final_review
 round: 2
 base_sha: "1111111111111111111111111111111111111111"
 current_review_head: "3333333333333333333333333333333333333333"
@@ -14,7 +19,7 @@ fresh_review:
   reviewer_isolation:
     status: achieved
     method: fresh_context
-  raw_findings_ref: "artifact://review-round-2/raw-findings"
+  raw_findings_ref: "hrb://github/lu90/example/pull/123/review-round/2/raw-findings@3333333333333333333333333333333333333333"
   finding_ids:
     - R2-RF-01
     - R2-RF-02
@@ -34,14 +39,24 @@ remediation_verification:
   reviewer_isolation:
     status: achieved
     method: fresh_context
-  prior_round_ref: "artifact://review-round-1"
+  prior_round_ref: "hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222"
   results:
     - prior_finding_id: R1-RF-01
       status: resolved
-      evidence_ref: "artifact://review-round-2/remediation/R1-RF-01"
+      evidence_ref: "hrb://github/lu90/example/pull/123/review-round/2/remediation/R1-RF-01@3333333333333333333333333333333333333333"
+
+finding_continuity:
+  inherited:
+    - finding_id: R1-RF-01
+      source_round_ref: "hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222"
+      remediation_status: resolved
+  decision_scope_finding_ids:
+    - R2-RF-01
+    - R2-RF-02
+    - R1-RF-01
 
 brief:
   compiler_isolation:
     status: achieved
     method: fresh_context
-  brief_ref: "artifact://review-round-2/human-review-brief"
+  brief_ref: "hrb://github/lu90/example/pull/123/review-round/2/human-review-brief@3333333333333333333333333333333333333333"
