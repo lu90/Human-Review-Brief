@@ -7,6 +7,13 @@ storage:
   marker: "hrb-review-round-record:v1"
 repository: lu90/example
 pr: 123
+payload_storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  markers:
+    raw_findings: "hrb-raw-findings:v1"
+    human_review_brief: "hrb-human-review-brief:v1"
+    remediation_evidence: "hrb-remediation-evidence:v1"
 review_stage: final_review
 round: 1
 base_sha: "1111111111111111111111111111111111111111"
