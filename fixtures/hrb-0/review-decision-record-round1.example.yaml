@@ -1,0 +1,35 @@
+schema_version: 1
+artifact: hrb-review-decision-record
+record_ref: "hrb://github/lu90/example/pull/123/decision/final_review/round-1/rev-1@2222222222222222222222222222222222222222"
+storage:
+  provider: github_pr_comment
+  discovery_ref: "github-pr-comments://lu90/example/pull/123"
+  marker: "hrb-review-decision-record:v1"
+repository: lu90/example
+pr: 123
+review_round_ref: "hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222"
+review_head: "2222222222222222222222222222222222222222"
+stage: final_review
+revision: 1
+supersedes_ref: null
+completion: complete
+overall_decision: request_changes
+spec_status: still_valid
+required_finding_ids:
+  - R1-RF-01
+decision_sources:
+  - source_id: owner-r1
+    decided_by: owner
+    recorded_by: orchestrator
+    source_kind: human_statement
+    captured_statement: "Keep the Spec. Fix R1-RF-01 in the current PR."
+    durable_source_ref: null
+overall_decision_source_ids:
+  - owner-r1
+findings:
+  - finding_id: R1-RF-01
+    disposition: remediate
+    owner_decision: "Fix R1-RF-01 within the approved implementation scope."
+    remediation_constraints: []
+    decision_source_ids:
+      - owner-r1
