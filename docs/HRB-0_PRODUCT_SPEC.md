@@ -748,7 +748,7 @@ For PR-centered HRB, the canonical durable state mechanism is a **GitHub PR comm
 
 The Review Round Record MUST also declare `payload_storage` for the same PR with canonical markers for `raw_findings`, `human_review_brief`, and `remediation_evidence`. Raw Findings, the compiled Human Review Brief, and remediation evidence are durable payload comments, not abstract references. Their canonical markers are `hrb-raw-findings:v1`, `hrb-human-review-brief:v1`, and `hrb-remediation-evidence:v1`.
 
-Each payload comment MUST contain a machine-readable `hrb-review-payload` envelope with `payload_type`, stable `record_ref`, repository, PR, `review_round_ref`, review head, and complete recoverable `content`. Resolution enumerates the declared PR comments, selects the expected marker, matches `record_ref` exactly, and validates repository/PR/round/head/type. Missing, duplicate, malformed, or scope-mismatched payloads fail closed. A bare `hrb://` reference without a resolvable payload is not durable evidence.
+Each payload comment MUST contain a machine-readable `hrb-review-payload` envelope with `payload_type`, stable `record_ref`, repository, PR, `review_round_ref`, review head, and complete recoverable `content`. `content` MUST be a non-null mapping. Raw Findings content MUST contain exactly the Round Record's Fresh Finding IDs and non-empty claim/evidence data for every Finding. Human Review Brief content MUST contain non-empty markdown. Remediation-evidence content MUST match the referenced prior Finding ID and remediation status and contain non-empty evidence. Resolution enumerates the declared PR comments, selects the expected marker, matches `record_ref` exactly, and validates repository/PR/round/head/type/body. Missing, duplicate, malformed, empty, Finding-incomplete, or scope-mismatched payloads fail closed. A bare `hrb://` reference without sufficient recoverable content is not durable evidence.
 
 Recovery MUST enumerate the PR comments from the discovery reference, parse only canonical markers, and validate repository, PR, head, round lineage, record reference, and every referenced payload before using the state. Timestamp ordering MUST NOT determine record identity. Before a write, the Orchestrator SHOULD detect an identical `record_ref` and reuse it; after a write it MUST read the comment back and validate it. Discovery/write/read-back failure is fail-closed. PR-comment creation remains an external write subject to the runtime's authorization rules.
 
@@ -785,7 +785,10 @@ Deterministic contract tooling MUST exercise at least:
 - rejection when a prior remediation-required/unresolved Finding is omitted from carry-forward;
 - rejection of a foreign or non-owning `source_round_ref`;
 - actual parsing/recovery of Round/Decision/payload comments and rejection of missing payloads;
-- exact-head gate invalidation plus valid descendant-head continuation using durable progress evidence.
+- exact-head gate invalidation plus valid descendant-head continuation for implementation, remediation, and Spec Loop using durable progress evidence;
+- recovery from `ready_for_final_hrb` to Final HRB and `ready_for_spec_hrb` to Spec HRB;
+- rejection of null/empty payload bodies and Raw Finding ID mismatch;
+- whole-scope Decision revision-graph validation, including a hidden supersession cycle outside the selected chain.
 
 This requirement does not introduce a general natural-language semantic validator.
 
@@ -815,7 +818,7 @@ The Agent MAY normalize and persist a human decision, but MUST NOT manufacture o
 
 Partial decisions MAY be saved while review is in progress, but are non-routable. A complete decision MUST cover every required Finding ID and contain no unresolved required item.
 
-A later decision revision MUST explicitly reference the prior `record_ref` via `supersedes_ref`. Effective-state recovery follows the explicit revision chain and MUST reject forks, cycles, missing predecessors, or multiple unsuperseded complete decisions for the same scope. It MUST NOT infer the latest decision from timestamps.
+A later decision revision MUST explicitly reference the prior `record_ref` via `supersedes_ref`. Before selecting any effective record, recovery MUST validate the entire current-scope revision graph: unique record refs and revision numbers, existing same-scope predecessors for every revision >1, exact +1 predecessor→successor revision increments, no cycles anywhere in the scope (including records outside the eventual effective chain), and exactly one unsuperseded effective record. It MUST reject hidden cycles/forks, duplicates, missing predecessors, and multiple effective records, and MUST NOT infer state from timestamps.
 
 Canonical examples live at:
 
@@ -839,9 +842,11 @@ Spec-review changes MUST return to Spec review rather than code remediation. If 
 
 A new review head invalidates an old-head **approval** for the new head, but it does not automatically invalidate the old Decision as continuation authority for work it explicitly authorized.
 
-When the branch has advanced beyond the reviewed head, a fresh Orchestrator MAY resume already-started implementation or remediation only if it proves that the current head descends from the reviewed head on the same repository/PR line and recovers durable implementation-progress evidence that names the source Decision `record_ref`, active route, reviewed/start head, current head, approved scope references, completed/pending slices, and current status. For implementation remediation, the progress Finding scope MUST be a subset of the Owner's explicit `remediate` dispositions. For Spec-approved implementation, the approved canonical Spec/governing scope MUST remain materially unchanged. Scope drift, changed governing Spec, missing progress evidence, mismatched source Decision, or unprovable ancestry blocks continuation.
+When the branch has advanced beyond the reviewed head, a fresh Orchestrator MAY resume already-started work only if it proves that the current head descends from the reviewed head on the same repository/PR line and recovers durable `delivery-progress` evidence naming the source Decision `record_ref`, active route, reviewed/start head, current head, approved scope, completed/pending slices, and status.
 
-This continuation rule permits verification, report/progress updates, code review, regression checks, and preparation of the next HRB. It MUST NOT treat the old Decision as approval of the new head. The next review gate still requires a new exact-head review/Decision before closeout or equivalent approval-dependent action.
+Canonical progress statuses are `in_progress`, `verifying`, `ready_for_final_hrb`, and `ready_for_spec_hrb`. The resumable routes are `tickets_or_implementation`, `implementation_remediation`, and `spec_loop`. Implementation remediation MUST exactly match Owner-`remediate` Finding IDs. Spec-approved implementation MUST retain the approved governing Spec scope. Spec Loop MUST exactly match Owner-`spec_change_required` Finding IDs plus the source Spec and unchanged authorized change scope. `ready_for_final_hrb` is valid only for implementation routes and resumes at Final HRB; `ready_for_spec_hrb` is valid only for Spec Loop and resumes at Spec HRB; ready states require an empty pending-slice set.
+
+This continuation rule permits the appropriate remaining verification/report/review work. It MUST NOT treat the old Decision as approval of the new head. The next review gate still requires a new exact-head review/Decision before closeout or equivalent approval-dependent action.
 
 Automatic routing removes the need for the human to name the next skill; it does not create external-write authorization.
 
