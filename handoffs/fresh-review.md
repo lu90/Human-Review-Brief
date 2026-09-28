@@ -9,6 +9,7 @@ allowed_inputs:
   - repository
   - pr
   - round
+  - review_stage
   - base_sha
   - current_head_sha
   - originating_spec_refs
@@ -24,6 +25,8 @@ forbidden_inputs:
   - prior_human_review_briefs
   - prior_human_decisions
   - prior_round_design_summaries
+  - full_implementation_report
+  - prior_review_material_from_indirect_inputs
 ---
 
 # HRB Fresh Independent Review
@@ -35,6 +38,7 @@ You are the independent Fresh Reviewer.
 Repository: {{repository}}
 PR: {{pr}}
 Review round: {{round}}
+Review stage: {{review_stage}}
 Base SHA: {{base_sha}}
 Current head SHA: {{current_head_sha}}
 
@@ -52,6 +56,8 @@ Deterministic verification evidence:
 
 Active base-SHA review policy, when present:
 {{active_base_review_policy}}
+
+The Orchestrator must sanitize indirect inputs before this handoff. Do not accept a full Implementation Report, prior review conclusions embedded in PR text, prior Human Review Briefs, or prior human decisions through `relevant_repository_context`. Current factual spec/code/verification evidence remains allowed.
 
 ## Review contract
 
