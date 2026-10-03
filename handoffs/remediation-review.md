@@ -71,6 +71,8 @@ For each prior finding return exactly one status using that finding's original I
 
 Return exactly one result for every supplied prior Finding ID: no omissions, no duplicates, and no newly invented/current-round Finding IDs.
 
+Use only the validated same-repository/PR/base lineage. A source Finding from a split's old PR is external provenance, not a remediation target or inherited Finding in this PR. Project/ChangeSet labels do not establish lineage or transfer an Owner decision.
+
 Every status must have supporting primary evidence. Sanitize sensitive payloads before they leave the evidence-access context; preserve safe provenance and access-boundary information instead of copying secrets into remediation output.
 
 Do not use implementation-agent claims, commit messages, or prior reviewer conclusions as proof when primary evidence is available.
