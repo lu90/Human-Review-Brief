@@ -216,6 +216,63 @@ def nonempty_string_array?(value)
   value.is_a?(Array) && !value.empty? && value.all? { |item| item.is_a?(String) && !item.empty? }
 end
 
+def project_context_errors(context, label)
+  return ["#{label} must be a mapping"] unless context.is_a?(Hash)
+
+  errors = []
+  keys = %w[entry_ref phase_id changeset_id scope_ref shared_contracts]
+  errors << "#{label} contains undeclared fields" unless (context.keys - keys).empty?
+  %w[entry_ref phase_id changeset_id scope_ref].each do |key|
+    value = context[key]
+    errors << "#{label}.#{key} must be a non-empty string" unless value.is_a?(String) && !value.strip.empty?
+  end
+
+  contracts = context["shared_contracts"]
+  unless contracts.is_a?(Array)
+    errors << "#{label}.shared_contracts must be an array"
+    return errors
+  end
+
+  refs = []
+  contracts.each_with_index do |contract, index|
+    unless contract.is_a?(Hash)
+      errors << "#{label}.shared_contracts[#{index}] must be a mapping"
+      next
+    end
+    errors << "#{label}.shared_contracts[#{index}] must contain only ref and revision" unless contract.keys.length == 2 && (contract.keys - %w[ref revision]).empty?
+    ref = contract["ref"]
+    refs << ref
+    errors << "#{label}.shared_contracts[#{index}].ref must be non-empty" unless ref.is_a?(String) && !ref.strip.empty?
+    revision = contract["revision"]
+    errors << "#{label}.shared_contracts[#{index}].revision must be a fixed 40-char Git SHA" unless revision.is_a?(String) && revision.match?(/\A[0-9a-f]{40}\z/)
+  end
+  errors << "#{label}.shared_contracts refs must be unique" unless refs.uniq.length == refs.length
+  errors
+end
+
+def project_continuation_errors(round, progress, recovered_project_context)
+  # A recovered snapshot is read from the Decision's fixed governing scope, never guessed from current progress.
+  reviewed = round.key?("project_context") ? round["project_context"] : recovered_project_context
+  return [] unless round.key?("project_context") || progress.key?("project_context") || !reviewed.nil?
+
+  errors = []
+  if reviewed.nil?
+    errors << "reviewed project context is missing; recover shared-contract baseline from approved scope"
+  else
+    errors.concat(project_context_errors(reviewed, "reviewed project_context"))
+  end
+  errors.concat(project_context_errors(progress["project_context"], "progress project_context"))
+  return errors unless errors.empty?
+
+  %w[phase_id changeset_id scope_ref].each do |key|
+    errors << "progress project_context.#{key} changed from authorized scope" unless progress["project_context"][key] == reviewed[key]
+  end
+  reviewed_contracts = reviewed["shared_contracts"].map { |contract| [contract["ref"], contract["revision"]] }.sort
+  current_contracts = progress["project_context"]["shared_contracts"].map { |contract| [contract["ref"], contract["revision"]] }.sort
+  errors << "shared-contract references or revisions changed since reviewed scope" unless current_contracts == reviewed_contracts
+  errors
+end
+
 def payload_content_errors(payload, payload_type, round, remediation_result = nil)
   errors = []
   content = payload && payload["content"]
@@ -457,6 +514,10 @@ def validate_round_record(round, label)
   fail_contract("#{label}: pr must be a positive integer") unless round["pr"].is_a?(Integer) && round["pr"] > 0
   fail_contract("#{label}: review_stage invalid") unless VALID_REVIEW_STAGE.include?(round["review_stage"])
   fail_contract("#{label}: round must be a positive integer") unless round["round"].is_a?(Integer) && round["round"] > 0
+  if round.key?("project_context")
+    context_errors = project_context_errors(round["project_context"], "#{label}.project_context")
+    fail_contract(context_errors.join("; ")) unless context_errors.empty?
+  end
   validate_storage(round["storage"], round["repository"], round["pr"], ROUND_RECORD_MARKER, "#{label}.storage")
   validate_payload_storage(round["payload_storage"], round["repository"], round["pr"], "#{label}.payload_storage")
   expected_ref_prefix = "hrb://github/#{round["repository"]}/pull/#{round["pr"]}/review-round/"
@@ -559,6 +620,7 @@ end
 def decision_record_errors(decision, round)
   errors = []
   return ["decision record must be a mapping"] unless decision.is_a?(Hash)
+  errors.concat(project_context_errors(round["project_context"], "round project_context")) if round.key?("project_context")
 
   errors << "schema_version must be 1" unless decision["schema_version"] == 1
   errors << "artifact must be hrb-review-decision-record" unless decision["artifact"] == "hrb-review-decision-record"
@@ -753,7 +815,7 @@ def gate_route_for_head(decision, round, current_head)
   decision_route(decision, round)
 end
 
-def continuation_errors(decision, round, current_head, descendant_pairs, progress)
+def continuation_errors(decision, round, current_head, descendant_pairs, progress, recovered_project_context = nil)
   errors = decision_record_errors(decision, round)
   return errors unless errors.empty?
 
@@ -777,6 +839,7 @@ def continuation_errors(decision, round, current_head, descendant_pairs, progres
   errors << "progress route mismatch" unless progress["route"] == route
   errors << "progress start_head mismatch" unless progress["start_head"] == reviewed_head
   errors << "progress current_head mismatch" unless progress["current_head"] == current_head
+  errors.concat(project_continuation_errors(round, progress, recovered_project_context))
 
   status = progress["status"]
   errors << "progress status invalid" unless VALID_PROGRESS_STATUS.include?(status)
@@ -837,8 +900,8 @@ def continuation_errors(decision, round, current_head, descendant_pairs, progres
   errors
 end
 
-def continuation_route(decision, round, current_head, descendant_pairs, progress)
-  errors = continuation_errors(decision, round, current_head, descendant_pairs, progress)
+def continuation_route(decision, round, current_head, descendant_pairs, progress, recovered_project_context = nil)
+  errors = continuation_errors(decision, round, current_head, descendant_pairs, progress, recovered_project_context)
   return ["blocked", errors] unless errors.empty?
 
   route = decision_route(decision, round)
@@ -939,12 +1002,13 @@ round1_decision_path = "fixtures/hrb-0/review-decision-record-round1.example.yam
 partial_decision_path = "fixtures/hrb-0/review-decision-record-partial.example.yaml"
 decision_path = "fixtures/hrb-0/review-decision-record.example.yaml"
 payload_comments_path = "fixtures/hrb-0/review-payload-comments.example.yaml"
+project_context_path = "fixtures/hrb-0/project-context.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
 fresh_handoff_path = "handoffs/fresh-review.md"
 remediation_handoff_path = "handoffs/remediation-review.md"
 compiler_handoff_path = "handoffs/brief-compiler.md"
 
-[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, round1_decision_path, partial_decision_path, decision_path, payload_comments_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
+[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, round1_decision_path, partial_decision_path, decision_path, payload_comments_path, project_context_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
@@ -1669,6 +1733,145 @@ legacy_round.delete("review_stage")
 legacy_round.delete("finding_continuity")
 fail_contract("legacy compatibility check: old Review Round Record became unreadable") unless legacy_round_readable?(legacy_round)
 fail_contract("legacy compatibility check: missing Decision Record must not route") unless decision_route({}, round1) == "blocked"
+
+# Extend the original functions with project association; canonical C01-C23 and their checks remain intact.
+project_suite = YAML.safe_load(File.read(project_context_path), aliases: false)
+fail_contract("project-context fixture must be a version-1 mapping") unless project_suite.is_a?(Hash) && project_suite["version"] == 1
+fail_contract("project-context fixture suite mismatch") unless project_suite["suite"] == "HRB-0-project-context"
+project_context = project_suite["project_context"]
+context_errors = project_context_errors(project_context, "project-context fixture")
+fail_contract(context_errors.join("; ")) unless context_errors.empty?
+
+linked_spec_round = deep_copy(spec_round)
+linked_spec_round["project_context"] = deep_copy(project_context)
+validate_round_record(linked_spec_round, "project-associated Spec round")
+linked_progress = deep_copy(spec_progress)
+linked_progress["project_context"] = deep_copy(project_context)
+ancestry = [[spec_approve["review_head"], advanced_head]]
+linked_route, linked_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, linked_progress)
+fail_contract("same-PR linked continuation failed: #{linked_errors.join("; ")}") unless linked_route == "tickets_or_implementation" && linked_errors.empty?
+fail_contract("project association approved a descendant head") unless gate_route_for_head(spec_approve, linked_spec_round, advanced_head) == "blocked"
+
+# The contract set is order-independent; the entry locator can advance without changing scope.
+reordered_progress = deep_copy(linked_progress)
+reordered_progress["project_context"]["shared_contracts"].reverse!
+reordered_progress["project_context"]["entry_ref"] = "docs/roadmap.md#current-delivery-entry"
+reordered_route, reordered_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, reordered_progress)
+fail_contract("equivalent contract set/updated entry locator was rejected: #{reordered_errors.join("; ")}") unless reordered_route == "tickets_or_implementation" && reordered_errors.empty?
+
+# Revision, addition, and removal drift must beat the unchanged-scope assertion.
+%w[revision addition removal].each do |mutation|
+  drift = deep_copy(linked_progress)
+  contracts = drift["project_context"]["shared_contracts"]
+  case mutation
+  when "revision"
+    contracts.first["revision"] = advanced_head
+  when "addition"
+    contracts << { "ref" => "docs/domain/new-contract.md", "revision" => advanced_head }
+  when "removal"
+    contracts.pop
+  end
+  drift_route, drift_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, drift)
+  fail_contract("shared-contract #{mutation} drift bypassed unchanged-scope flag") unless drift_route == "blocked" && drift_errors.include?("shared-contract references or revisions changed since reviewed scope")
+end
+
+# Ready states and both other continuation routes retain the same pin check.
+linked_final_round = deep_copy(round2)
+linked_final_round["project_context"] = deep_copy(project_context)
+[
+  [decision, ready_final_progress],
+  [spec_change, ready_spec_progress],
+  [spec_change, spec_loop_progress]
+].each do |source_decision, source_progress|
+  drift = deep_copy(source_progress)
+  drift["project_context"] = deep_copy(project_context)
+  drift["project_context"]["shared_contracts"].first["revision"] = advanced_head
+  drift_route, drift_errors = continuation_route(source_decision, linked_final_round, advanced_head, ancestry, drift)
+  fail_contract("#{source_progress["status"]}/#{source_progress["route"]} bypassed shared-contract drift") unless drift_route == "blocked" && drift_errors.include?("shared-contract references or revisions changed since reviewed scope")
+end
+
+# Existing association does not revoke a legacy Decision when its reviewed facts can be recovered.
+legacy_linked_route, legacy_linked_errors = continuation_route(spec_approve, spec_round, advanced_head, ancestry, linked_progress, project_context)
+fail_contract("verified legacy project association failed: #{legacy_linked_errors.join("; ")}") unless legacy_linked_route == "tickets_or_implementation" && legacy_linked_errors.empty?
+missing_baseline_route, missing_baseline_errors = continuation_route(spec_approve, spec_round, advanced_head, ancestry, linked_progress)
+fail_contract("legacy linked continuation guessed reviewed pins") unless missing_baseline_route == "blocked" && missing_baseline_errors.any? { |error| error.include?("recover shared-contract baseline") }
+
+# A supplied fallback never replaces the fixed Round snapshot, even if it agrees with the drifted current version.
+forged_recovery = deep_copy(project_context)
+forged_recovery["shared_contracts"].first["revision"] = advanced_head
+drifted_progress = deep_copy(linked_progress)
+drifted_progress["project_context"] = deep_copy(forged_recovery)
+override_route, override_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, drifted_progress, forged_recovery)
+fail_contract("recovered context overrode fixed reviewed pins") unless override_route == "blocked" && override_errors.include?("shared-contract references or revisions changed since reviewed scope")
+
+# Dropping or malforming the optional mapping cannot restore the unassociated route.
+missing_context = deep_copy(linked_progress)
+missing_context.delete("project_context")
+missing_context_route, missing_context_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, missing_context)
+fail_contract("linked progress silently discarded its project context") unless missing_context_route == "blocked" && missing_context_errors.any? { |error| error.include?("progress project_context must be a mapping") }
+
+invalid_contexts = [nil, deep_copy(project_context), deep_copy(project_context), deep_copy(project_context), deep_copy(project_context)]
+invalid_contexts[1]["shared_contracts"].first["revision"] = "main"
+invalid_contexts[2]["shared_contracts"] << deep_copy(invalid_contexts[2]["shared_contracts"].first)
+invalid_contexts[3]["overall_decision"] = "approve"
+invalid_contexts[4].delete("scope_ref")
+missing_contracts = deep_copy(project_context)
+missing_contracts["shared_contracts"] = nil
+invalid_contexts << missing_contracts
+malformed_contract = deep_copy(project_context)
+malformed_contract["shared_contracts"] = ["unversioned-contract"]
+invalid_contexts << malformed_contract
+invalid_contexts.each_with_index do |invalid_context, index|
+  invalid_progress = deep_copy(linked_progress)
+  invalid_progress["project_context"] = invalid_context
+  invalid_route, invalid_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, invalid_progress)
+  fail_contract("invalid optional project context #{index} was accepted") unless invalid_route == "blocked" && !invalid_errors.empty?
+  invalid_round = deep_copy(linked_spec_round)
+  invalid_round["project_context"] = invalid_context
+  fail_contract("invalid Round project context #{index} remained routable") unless decision_route(spec_approve, invalid_round) == "blocked"
+end
+
+%w[phase_id changeset_id scope_ref].each do |key|
+  changed_scope = deep_copy(linked_progress)
+  changed_scope["project_context"][key] = "unrelated-authority"
+  changed_route, changed_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, changed_scope)
+  fail_contract("project #{key} drift was accepted") unless changed_route == "blocked" && changed_errors.include?("progress project_context.#{key} changed from authorized scope")
+end
+
+# Same-PR association keeps the original valid lineage and Finding IDs.
+linked_round1 = deep_copy(round1)
+linked_round1["project_context"] = deep_copy(project_context)
+linked_round1["project_context"]["scope_ref"] = "docs/spec.md@#{round1["current_review_head"]}"
+validate_round_lineage(linked_round1, linked_final_round, round1_decision, [linked_round1], "project-associated same-PR lineage")
+
+# A split starts a new PR's own Round 1. Its old ID is held only in the external origin mapping.
+split_source = project_suite["split_source"]
+fail_contract("split fixture must identify an actual source Finding") unless split_source.is_a?(Hash) && split_source["source_round_ref"] == round2["record_ref"] && round2["fresh_review"]["finding_ids"].include?(split_source["source_finding_id"])
+destination_pr = split_source["destination_pr"]
+fail_contract("split fixture needs a different positive PR") unless destination_pr.is_a?(Integer) && destination_pr > 0 && destination_pr != round2["pr"]
+require_nonempty_string(split_source["destination_changeset_id"], "split fixture.destination_changeset_id")
+new_pr_round = deep_copy(round1)
+new_pr_round["pr"] = destination_pr
+new_pr_round["record_ref"] = new_pr_round["record_ref"].sub("/pull/123/", "/pull/#{destination_pr}/")
+new_pr_round["storage"]["discovery_ref"] = "github-pr-comments://#{new_pr_round["repository"]}/pull/#{destination_pr}"
+new_pr_round["payload_storage"]["discovery_ref"] = new_pr_round["storage"]["discovery_ref"]
+new_pr_round["fresh_review"]["raw_findings_ref"] = new_pr_round["fresh_review"]["raw_findings_ref"].sub("/pull/123/", "/pull/#{destination_pr}/")
+new_pr_round["brief"]["brief_ref"] = new_pr_round["brief"]["brief_ref"].sub("/pull/123/", "/pull/#{destination_pr}/")
+new_pr_round["project_context"] = deep_copy(project_context)
+new_pr_round["project_context"]["changeset_id"] = split_source["destination_changeset_id"]
+new_pr_round["project_context"]["scope_ref"] = "docs/split-spec.md@#{new_pr_round["current_review_head"]}"
+validate_round_record(new_pr_round, "split destination's independent Round 1")
+fail_contract("split source ID entered new PR decision scope") if decision_scope_ids(new_pr_round).include?(split_source["source_finding_id"])
+fail_contract("new PR inherited old approval") unless decision_route(final_approve, new_pr_round) == "blocked"
+
+cross_pr_round = deep_copy(linked_final_round)
+cross_pr_round["pr"] = destination_pr
+cross_pr_errors = round_lineage_errors(linked_round1, cross_pr_round, round1_decision, [linked_round1])
+fail_contract("split treated an old PR Finding as inherited") unless cross_pr_errors.include?("PR changed across rounds") && cross_pr_errors.any? { |error| error.include?("not in the current repository/PR/base lineage") }
+cross_pr_progress = deep_copy(linked_progress)
+cross_pr_progress["pr"] = destination_pr
+cross_pr_route, cross_pr_continuation_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, cross_pr_progress)
+fail_contract("split progress reused the old PR Decision") unless cross_pr_route == "blocked" && cross_pr_continuation_errors.include?("progress PR mismatch")
 
 policy_text = File.read(policy_path)
 fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")

@@ -128,6 +128,36 @@ base→head diff
 
 HRB-0 MUST NOT require a persisted repository-understanding cache or invalidation engine. A future version MAY add persistent repository understanding if repeated context reconstruction is shown to be a real performance or cost bottleneck.
 
+### 5.1 Project association and shared contracts
+
+The project's existing Roadmap, ChangeSet, or delivery entry MAY index the Phase, ChangeSet, current authoritative scope, applicable shared contracts at fixed versions, existing progress/Implementation Report, and durable Review Round/Decision references. The entry is a locator: scope, progress, and approval remain authoritative in their respective artifacts. It MUST NOT copy a second approval state, expand an approved scope, infer Phase completion from a merged PR, or substitute for missing durable review evidence.
+
+Project association does not require HRB for a small Bug, maintenance task, or read-only investigation whose applicable route does not require HRB. Use that route's Issue or behavior baseline and mark genuinely inapplicable review artifacts N/A with the route/repository basis. Once HRB is entered, fixed-version scope, eight-dimension coverage, isolation, recoverable human decisions, and the applicable Final-review Implementation Report gate remain mandatory.
+
+Current schema-1 Round Records and existing `delivery-progress` artifacts MAY carry an optional `project_context` snapshot:
+
+| Field | Meaning |
+| --- | --- |
+| `entry_ref` | Locator for the existing project/ChangeSet entry linking the authoritative artifacts |
+| `phase_id` | Existing Phase identifier or applicable maintenance category |
+| `changeset_id` | Stable identifier for this authorized delivery scope |
+| `scope_ref` | Fixed reference to the authority for this review or authorized work scope |
+| `shared_contracts` | Array of `{ref, revision}` entries: stable contract locator and full 40-character lowercase Git SHA |
+
+When the optional mapping is present, all five fields are required within it; the four scalar fields MUST be non-empty strings. Each shared-contract entry MUST contain exactly `ref` and `revision`, and contract refs MUST be unique. An empty array means no applicable shared contracts; its applicability basis belongs in the existing scope/entry. No status or decision fields are allowed in this mapping. Omission preserves existing schema-1 compatibility; explicit null is invalid. The locator's revision may advance while the authorized Phase/ChangeSet/scope identity stays fixed.
+
+The Round snapshot records the factual contracts inspected at that fixed review scope; it does not grant approval. During continuation, the Orchestrator MUST reread applicable authoritative contracts and record the current pin set in existing progress. Added, removed, or changed contract pins require affected scope, consumer, and verification reassessment and the applicable existing review/Owner decision. `governing_scope_unchanged: true`, `change_scope_unchanged: true`, or another unchanged-scope assertion cannot override a pin mismatch.
+
+For a legacy Round without this snapshot, adding project association alone does not invalidate a business decision. Recover the reviewed snapshot from primary artifacts at the Decision's approved scope/version before comparing it with linked progress. The deterministic continuation functions accept this verified snapshot as optional `recovered_project_context` input only when the Round lacks `project_context`; it never overrides an existing Round snapshot. The Orchestrator MUST verify its source belongs to that Decision's fixed scope. Missing or unverifiable source evidence is a specific recovery gap, not a successful comparison. A legacy chain with no project association retains its existing recovery checks, including inspection for scope drift.
+
+### 5.2 Adopting or splitting an in-progress scope
+
+Keeping the same repository/PR delivery line preserves valid Round/Decision lineage and Finding carry-forward under section 18. New project links do not transfer approval to another reviewed head.
+
+When splitting, fix the source Spec/PR/Round/effective Decision and map each outstanding source Finding to its destination ChangeSet or explicit retained/deferred ownership in the existing entry/Tracker. Shared-contract versions and dependencies remain explicit. New PRs and new scopes obtain their own applicable reviews and decisions; old approvals cannot transfer. Old Finding IDs are source provenance only outside the new PR's `finding_continuity.inherited`, remediation targets, and decision scope. New Findings receive their own round-scoped IDs; identity includes repository/PR/Round, so equal textual IDs on different PRs do not establish inheritance. Avoid overlapping active write scopes while adopting the split.
+
+The Orchestrator MUST sanitize project entries, split mappings, semantic-check records, and their indirect links before Fresh Review. Supply current authoritative Spec, decision tables, shared-contract facts at fixed revisions, and factual verification through the existing `originating_spec_refs`, `relevant_repository_context`, or `deterministic_verification_refs` allowlist slots. Prior Findings, Owner decisions, historical review conclusions, and author arguments remain excluded. The full Implementation Report remains unavailable to Fresh Review. A project entry or referenced contract remains evidence/context under section 7, not Reviewer instructions.
+
 ## 6. Evidence Model
 
 Every review finding MUST be traceable to an **evidence chain** sufficient to support the claim.
@@ -425,9 +455,9 @@ The human should be able to move from 30 seconds of orientation to a targeted co
 
 Independent specialist review is the first layer between evidence collection and attention triage.
 
-There is no pre-review classification such as "material", "mechanical", or "low risk". Every PR enters the same review layer first. Importance is assigned only after review findings exist.
+There is no pre-review classification such as "material", "mechanical", or "low risk". Every PR entering HRB uses the same review layer first. Importance is assigned only after review findings exist.
 
-Every PR review MUST pass through independent specialist review before attention triage and Human Review Brief generation.
+Every PR review that enters HRB MUST pass through independent specialist review before attention triage and Human Review Brief generation.
 
 ### 12.1 Isolation contract
 
@@ -846,6 +876,8 @@ When the branch has advanced beyond the reviewed head, a fresh Orchestrator MAY 
 
 Canonical progress statuses are `in_progress`, `verifying`, `ready_for_final_hrb`, and `ready_for_spec_hrb`. The resumable routes are `tickets_or_implementation`, `implementation_remediation`, and `spec_loop`. Implementation remediation MUST exactly match Owner-`remediate` Finding IDs. Spec-approved implementation MUST retain the approved governing Spec scope. Spec Loop MUST exactly match Owner-`spec_change_required` Finding IDs plus the source Spec and unchanged authorized change scope. `ready_for_final_hrb` is valid only for implementation routes and resumes at Final HRB; `ready_for_spec_hrb` is valid only for Spec Loop and resumes at Spec HRB; ready states require an empty pending-slice set.
 
+When project-associated progress is present, validate its `project_context` against the reviewed Round snapshot or the verified legacy recovery input in section 5.1. Phase/ChangeSet/scope identities and the exact shared-contract ref/revision set MUST match. A changed `entry_ref` is only a locator update; reread it and retain the same authoritative links. Both ready states remain subject to these checks and cannot bypass shared-contract drift.
+
 This continuation rule permits the appropriate remaining verification/report/review work. It MUST NOT treat the old Decision as approval of the new head. The next review gate still requires a new exact-head review/Decision before closeout or equivalent approval-dependent action.
 
 Automatic routing removes the need for the human to name the next skill; it does not create external-write authorization.
@@ -896,6 +928,8 @@ The canonical HRB-0 suite covers:
 - C21 restart/idempotent recovery;
 - C22 external-write authorization boundaries;
 - C23 legacy Review Round Record compatibility without invented approval.
+
+`project-context.example.yaml` extends the executable self-checks without replacing C01–C23. The existing continuation and round-lineage functions MUST exercise valid same-PR work, verified legacy association, missing reviewed context, shared-contract additions/removals/revision drift despite unchanged-scope flags, new-PR provenance without inheritance, and rejection of old-PR approval reuse. Optional-context shape, fixed pins, uniqueness, and absence of copied approval fields are checked with actual negative inputs. These checks do not prove live-Agent sanitization or semantic judgment.
 
 ## 20. HRB-0 Exit Criteria
 

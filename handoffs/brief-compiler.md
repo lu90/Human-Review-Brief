@@ -88,6 +88,8 @@ Assign A1-A4 only as human-attention ordering labels:
 
 The labels do not authorize omission or skipping. Preserve a traceable representation of every Raw Finding. Finding IDs are immutable: display and reference the full ID, including its round prefix, and never infer identity from a shared numeric suffix across rounds. Merge only true duplicates, record contributing Raw Finding IDs, and preserve disagreement or distinct evidence.
 
+When supplied through `spec_ticket_refs` or factual report content, show project/Phase/ChangeSet locators and fixed shared-contract scope without copying an approval status from a project entry. Preserve the current PR's validated Finding lineage. Old split-source IDs identify external provenance only; they do not supply inherited Findings or approval for this scope.
+
 If primary evidence inspected for clarification contains a sensitive payload, sanitize it before including any derivative in the brief or another handoff; preserve safe provenance and access-boundary information instead of the secret.
 
 If the finding set is too large for one practical brief, partition it instead of hiding lower-priority findings.
