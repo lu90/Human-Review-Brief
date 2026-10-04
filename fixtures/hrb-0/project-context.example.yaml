@@ -1,0 +1,22 @@
+version: 1
+suite: HRB-0-project-context
+# Optional snapshot on a Round Record or existing delivery-progress artifact.
+# The entry links progress, Round, and Decision; it does not copy their status.
+project_context:
+  entry_ref: "docs/roadmap.md#phase-1-changeset-analysis"
+  phase_id: PHASE-1
+  changeset_id: CS-ANALYSIS
+  scope_ref: "docs/spec.md@3333333333333333333333333333333333333333"
+  shared_contracts:
+    - ref: "docs/domain/batch-rules.md#accepted-batch"
+      revision: "3333333333333333333333333333333333333333"
+    - ref: "docs/domain/time-rules.md#precision"
+      revision: "2222222222222222222222222222222222222222"
+
+# Test inputs for an external split-origin mapping, outside HRB record schema.
+# A new PR starts its own Round 1; the original Finding is provenance only.
+split_source:
+  source_finding_id: R2-RF-01
+  source_round_ref: "hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333"
+  destination_pr: 124
+  destination_changeset_id: CS-ANALYSIS-SPLIT

@@ -13,6 +13,7 @@ Ask:
 - Is this the right base / fixed point?
 - Is this the right branch, PR, or commit range?
 - Is the correct spec / ticket being used?
+- If project context is linked, does its Phase/ChangeSet point to the current authoritative scope, fixed shared-contract versions, progress/report, and actual Round/Decision records rather than copied approval labels?
 - Is the brief centered on the actual base→current-head PR diff rather than an outdated repository summary?
 - If this is round 2+, are the previous review head and round number recorded?
 - If `.hrb/REVIEW_POLICY.md` changed in this PR, is the base-SHA policy still being used for the current review?
@@ -80,6 +81,7 @@ Ask:
 - If evidence was redacted, can I still tell where it came from and which claim it supports?
 - Has any sensitive payload leaked into a Raw Finding, persisted review artifact, worker handoff, or final brief instead of being sanitized at the evidence boundary?
 - Is the most important business behavior actually exercised?
+- When resuming linked work, were shared-contract refs and revisions compared with the reviewed scope, including any recovered legacy snapshot? A true unchanged-scope flag does not settle a version mismatch.
 
 Do not equate "CI is green" with "the change is correct."
 
@@ -111,6 +113,8 @@ The Orchestrator may persist partial decisions while you are still reviewing. Pa
 If you later change or complete the decision, the new Review Decision Record must explicitly supersede the prior record. A Fresh Orchestrator must validate the revision chain, Finding IDs, decision source, current head, Spec status, and internal consistency before routing.
 
 Approval of an HRB is not merge permission, tracker-write permission, or any other external-write authorization.
+
+Project association adds navigation, not another approval. A small task follows its applicable route without creating unnecessary Spec/HRB records; entering HRB retains all of its gates. Keeping the same PR preserves valid history, while a split into new PRs requires their own applicable decisions. Old Finding IDs remain source provenance and old approvals do not transfer to the new scope or head.
 
 The goal is not to read everything.
 

@@ -59,7 +59,7 @@ Raw Findings use stable IDs such as `R5-RF-01`: the sequence restarts each round
 
 Worker prompts are not rewritten from scratch each round. HRB uses canonical role-specific handoff templates under `handoffs/`; the Orchestrator fills only declared inputs. Fresh-review handoffs are deny-by-default and exclude prior findings, remediation conclusions, previous human decisions, author rationale, the implementation conversation, and the full Implementation Report. Final-review compilation may use the current Implementation Report after the Orchestrator verifies it is current.
 
-Every PR first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
+Every PR entering HRB first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168
@@ -122,6 +122,10 @@ When documents disagree:
 PR-centered HRB uses marked GitHub PR comments for Review Round Records and Review Decision Records. Stable `hrb://github/...` record references plus explicit `supersedes_ref` chains make recovery deterministic; timestamps are not workflow state. Missing or invalid human decisions fail closed instead of being inferred from discussion.
 
 A valid Decision Record can route a fresh Orchestrator to continued Human Review, the Implementation Remediation Loop, the Spec Loop, tickets/authorized implementation after Spec approval, or closeout after Final approval. Those routes preserve their own external-write authorization gates.
+
+Existing project entries can link Phase/ChangeSet, authoritative scope, fixed shared-contract revisions, progress/report, and durable review records without copying approval state. Optional schema-1 `project_context` snapshots use the contract in Product Spec section 5.1. Linked continuation compares contract pins and blocks drift even when scope is asserted unchanged. Older records remain readable; missing reviewed pins are recovered from approved primary scope or reported as a gap.
+
+An in-progress delivery can keep its existing PR lineage. Splitting into new PRs preserves old Findings as provenance and obtains new applicable decisions. The Orchestrator strips review history and author arguments from project/split entries before supplying current facts through the existing Fresh Review allowlist. Small tasks use their applicable route; project association alone does not require HRB.
 
 ## Status
 
