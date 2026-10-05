@@ -227,7 +227,7 @@ cases:
         prior_round_ref_must_match_previous_record_ref: true
         finding_ids_and_coverage_must_be_consistent: true
     must_not:
-      - replace the fresh full review with remediation review
+      - replace the independent Fresh Review with remediation review
       - provide prior findings or remediation conclusions to the fresh reviewer
       - mark remediation isolation achieved when current-round Fresh Review findings are injected
       - renumber prior findings during remediation

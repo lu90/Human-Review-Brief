@@ -1,0 +1,143 @@
+version: 1
+suite: HRB-0-delta-review
+full_review_basis:
+  review_head: '2222222222222222222222222222222222222222'
+  authority_snapshot:
+    scope_refs:
+    - git://lu90/example/docs/spec.md@1111111111111111111111111111111111111111
+    review_policy_ref: none@1111111111111111111111111111111111111111
+    shared_contract_refs: []
+  coverage:
+    spec_scope:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    architecture_correctness:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    tests_verification:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    security_privacy:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    data_migrations:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    operations_observability:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    performance_compatibility:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+    adversarial_challenge:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      - src/unaffected.rb
+      reused_scope: []
+delta_review_basis:
+  review_head: '3333333333333333333333333333333333333333'
+  authority_snapshot:
+    scope_refs:
+    - git://lu90/example/docs/spec.md@1111111111111111111111111111111111111111
+    review_policy_ref: none@1111111111111111111111111111111111111111
+    shared_contract_refs: []
+  coverage:
+    spec_scope:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    architecture_correctness:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    tests_verification:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    security_privacy:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    data_migrations:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    operations_observability:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    performance_compatibility:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+    adversarial_challenge:
+      newly_reviewed_scope_refs:
+      - src/changed.rb
+      reused_scope:
+      - source_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+        source_head: '2222222222222222222222222222222222222222'
+        scope_refs:
+        - src/unaffected.rb
+  delta_eligibility:
+    prior_round_ref: hrb://github/lu90/example/pull/123/review-round/1@2222222222222222222222222222222222222222
+    evidence_ref: fixture://delta-eligibility/round-2
+eligibility_evidence:
+  fixture://delta-eligibility/round-2:
+    repository: lu90/example
+    pr: 123
+    base_sha: '1111111111111111111111111111111111111111'
+    review_stage: final_review
+    previous_review_head: '2222222222222222222222222222222222222222'
+    current_review_head: '3333333333333333333333333333333333333333'
+    descendant: true
+    full_review_reasons: []
+    required_review_scope_refs:
+    - src/changed.rb
+    unchanged_scope_refs:
+    - src/unaffected.rb
+    primary_evidence_refs:
+    - fixture://git-ancestry/2-to-3
+    - fixture://diff-and-impact/2-to-3
+    - fixture://authority-comparison/2-to-3

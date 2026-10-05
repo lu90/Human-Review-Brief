@@ -15,6 +15,8 @@ allowed_inputs:
   - previous_review_head
   - raw_findings
   - coverage_manifest
+  - review_scope
+  - review_basis
   - reviewer_isolation
   - remediation_results
   - remediation_reviewer_isolation
@@ -51,6 +53,10 @@ Raw Findings:
 Review Coverage Manifest:
 {{coverage_manifest}}
 
+Selected Fresh Review scope and factual new/reused coverage:
+{{review_scope}}
+{{review_basis}}
+
 Reviewer isolation metadata:
 {{reviewer_isolation}}
 
@@ -78,6 +84,8 @@ Current Implementation Report for final review, otherwise null:
 ## Compilation contract
 
 Compile the supplied review evidence into the Human Review Brief.
+
+Expose whether Fresh Review was full or an eligible delta, its fixed heads and impact boundary, each dimension's newly reviewed versus reused coverage, and any reason for escalation. Never describe reused coverage as a fresh current-head review or inherited approval. Preserve all applicable inherited Findings alongside current Fresh Findings and separate remediation results.
 
 Assign A1-A4 only as human-attention ordering labels:
 

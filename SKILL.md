@@ -15,7 +15,7 @@ HRB uses one orchestrator and two primary worker roles:
 
 - **Orchestrator** — owns scope and handoffs.
 - **Reviewer** — one primary runtime role with two execution modes:
-  - **Fresh Review mode** — independently reviews the fixed base→current-head PR and returns evidence-backed Raw Findings.
+  - **Fresh Review mode** — independently reviews the fixed PR scope, using a full review first and an eligible delta review in later rounds, and returns evidence-backed Raw Findings.
   - **Remediation Review mode** — for round 2+, verifies prior findings against the previous-review-head→current-head remediation delta without seeing current-round Fresh Review findings.
 - **Brief Compiler** — performs A1–A4 attention triage and produces the Human Review Brief.
 
@@ -80,7 +80,7 @@ Expand outward only as needed to interpret the change:
 - CI;
 - authoritative specs/docs.
 
-HRB-0 does not require a persisted repository baseline or invalidation engine. Reconstruct the bounded context from the fixed PR scope on each review.
+HRB-0 does not require a persisted repository baseline or invalidation engine. Reconstruct only the context needed for the selected review scope; traceable prior coverage can support a later delta review under Step 5.
 
 ## Step 3 — Collect evidence chains
 
@@ -146,7 +146,7 @@ Give the reviewer a bounded review package:
 
 The Orchestrator MUST inspect indirect inputs such as PR descriptions, Implementation Reports, project entries, split-origin mappings, and semantic-check records for prior review conclusions or human decisions before building the Fresh Reviewer package. Extract current authoritative Spec, decision tables, fixed shared-contract facts, and factual verification into the existing allowlist slots. Remove old Findings, Owner decisions, and author arguments, including through linked entries. Do not pass the full Implementation Report to Fresh Review. Current authoritative specs and factual current-state verification remain allowed.
 
-For the fresh full review, do not provide or expose prior-round findings or remediation conclusions at all. They MUST NOT be visible in the fresh Reviewer context.
+For every Fresh Review, do not provide or expose prior-round findings or remediation conclusions at all. They MUST NOT be visible in the fresh Reviewer context. An eligible delta handoff may include only the sanitized coverage facts specified in Step 5, never the complete prior Round Record.
 
 Prefer a separate sub-agent or fresh context that does not inherit the implementation conversation.
 
@@ -229,6 +229,8 @@ A dimension may return:
 
 Record an explicit result for every required dimension. An omitted dimension is not the same as `no finding`.
 
+For a delta review, these results describe new review of the delta and affected context. Separately record newly reviewed and reused scope for every dimension; reused coverage is not a new `no finding` conclusion and does not discard inherited Findings.
+
 Routine, generated, formatting-only, rename-only, or otherwise low-attention changes are still reviewed and can later be classified as A3/A4.
 
 The contract requires dimension coverage, not one agent per dimension. One isolated reviewer may cover several dimensions, or multiple specialist reviewers may run independently.
@@ -266,11 +268,21 @@ The Reviewer does not self-certify isolation. The Orchestrator attaches Reviewer
 
 Reviewers produce findings, not merge decisions.
 
-Return the Raw Findings and Review Coverage Manifest to the Orchestrator. Do not perform final A1–A4 classification in the Reviewer context.
+Return the Raw Findings and Review Coverage Manifest to the Orchestrator, including factual `review_basis` coverage when establishing a reusable full baseline or performing a delta review. If delta eligibility fails, return the concrete full-review reason. Do not perform final A1–A4 classification in the Reviewer context.
 
 ## Step 5 — Optional remediation verification
 
-For review round 2 or later, first finish the fresh independent base→current-head review.
+Round 1 requires a fresh independent base→current-head review. For round 2+, select the Fresh Review scope before launching the Reviewer:
+
+- Use `previous_review_head_to_current_head` plus affected dependencies/contracts when repository, PR, base, stage and authoritative scope are unchanged, descendant ancestry is proven, prior independent coverage is complete and recoverable, and the impact is bounded.
+- Use `base_to_current_head` if the base, Spec, review policy or shared authority changes; the delta is broad, cross-cutting or high risk; impact is uncertain; prior coverage/evidence is missing, invalid or not isolated; or the Reviewer requests a full review. Record the reason. A base or PR change starts its applicable new lineage.
+- Do not decide from diff size alone. The Fresh Reviewer independently checks the proposed impact boundary and can expand it or require a full review.
+
+Use the additive `fresh_review.review_basis` contract in Product Spec section 18.1. It binds every dimension's newly reviewed scope and reused unchanged scope to fixed heads, prior coverage and primary eligibility evidence. Validate the entire reuse chain before using it. Legacy full records remain valid, but cannot supply missing reuse evidence; perform a full review to establish a usable baseline.
+
+The Fresh handoff's `review_scope` and `sanitized_coverage_basis` contain only fixed scope, authority versions, dimension/scope coverage locators and primary eligibility evidence. Remove findings, finding counts, dispositions, conclusions and author rationale, including from linked records. Do not provide the complete prior Round or Decision Record. Coverage reuse never inherits approval: the current head still receives its own complete brief and applicable human Decision.
+
+Finish this independent Fresh Review before launching separate remediation verification. Existing validation results may be reused only while their code, inputs, environment and contract assumptions remain applicable; label their original scope and limits rather than claiming a current-head run.
 
 Before launching remediation, deterministically validate the prior-round transition:
 
@@ -304,7 +316,7 @@ A round-2+ brief MUST receive this metadata together with remediation results.
 
 After remediation returns, deterministically verify its prior Finding IDs. For current durable records, they MUST exactly cover the prior Review Round Record's `finding_continuity.decision_scope_finding_ids`: no omissions, no duplicates, no unknown/chain-external IDs, and no current-round Fresh Finding IDs. Legacy records without `finding_continuity` may still be read, but they cannot by themselves establish routable human approval.
 
-Do not use remediation review as a substitute for the fresh full review.
+Do not use remediation review as a substitute for the independent Fresh Review, whether full or an eligible delta review.
 
 ## Step 6 — Launch Brief Compiler
 

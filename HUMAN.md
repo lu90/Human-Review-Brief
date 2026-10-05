@@ -14,7 +14,7 @@ Ask:
 - Is this the right branch, PR, or commit range?
 - Is the correct spec / ticket being used?
 - If project context is linked, does its Phase/ChangeSet point to the current authoritative scope, fixed shared-contract versions, progress/report, and actual Round/Decision records rather than copied approval labels?
-- Is the brief centered on the actual base→current-head PR diff rather than an outdated repository summary?
+- Is the brief bound to the actual current PR head, with full or eligible delta scope clearly identified?
 - If this is round 2+, are the previous review head and round number recorded?
 - If `.hrb/REVIEW_POLICY.md` changed in this PR, is the base-SHA policy still being used for the current review?
 
@@ -34,7 +34,9 @@ An omitted dimension is not equivalent to `no finding`.
 
 If this is round 2+, also confirm that:
 
-- the fresh full review ran before the separate remediation verification;
+- an independent Fresh Review ran before separate remediation verification;
+- if Fresh Review used a delta, its affected boundary and every dimension's newly reviewed versus reused coverage are explicit, with valid prior pins and unchanged authority;
+- uncertain/high-risk/broad impact or missing reuse evidence escalated to full review, and previous approval was not transferred to the new head;
 - Remediation Review mode isolation status and method are reported;
 - an isolated runtime was not marked `achieved` if the remediation handoff contained current-round Fresh Review findings or another forbidden input.
 
