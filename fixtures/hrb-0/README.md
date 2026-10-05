@@ -34,7 +34,7 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C07_REVIEW_COVERAGE_MANIFEST` — all specialist dimensions must be explicitly accounted for.
 - `C08_POLICY_CHANGE_SAME_PR` — proposed policy cannot authorize itself.
 - `C09_REDACTED_EVIDENCE` — sensitive payload is removed while provenance survives.
-- `C10_REMEDIATION_ROUND` — fresh full review remains isolated from remediation verification.
+- `C10_REMEDIATION_ROUND` — independent Fresh Review remains isolated from remediation verification; this fixture exercises the full route.
 - `C11_ISOLATION_UNAVAILABLE` — isolation failure must be disclosed.
 - `C12_HANDOFF_INPUT_ISOLATION` — Fresh Reviewer handoffs are canonical, whitelist-only, and deny prior-review/implementation context.
 - `C13_POLICY_INTRODUCED_SAME_PR` — a review policy introduced by the current PR is evidence only and cannot authorize that same PR.
@@ -50,6 +50,8 @@ An implementation conforms when it preserves these invariants, even if wording o
 - `C23_LEGACY_COMPATIBILITY` — legacy Round Records remain readable but cannot synthesize missing human approval.
 
 The cases are defined in `cases.yaml`. Canonical Review Round Record examples are provided for both round 1 and round 2+, plus prior/partial/complete Review Decision Record examples. `review-payload-comments.example.yaml` contains actual marked PR-comment bodies for Raw Findings, Human Review Briefs, and remediation evidence.
+
+`delta-review.example.yaml` supplies a full coverage baseline, a later delta basis and resolved primary-evidence facts for section 18.1. The validator exercises valid reuse, a chained delta, and rejection of missing coverage, stale heads, changed authority, broken lineage, unproven ancestry, invalid reuse and full-review escalation reasons. Existing full records remain compatible; these supplied-fact tests do not prove live semantic impact or runtime isolation.
 
 Deterministic self-checks execute the recovery functions rather than only checking expected fixture booleans: they parse marked comment YAML; require non-null type-specific payload bodies; verify Raw Finding IDs against the Round Record; validate remediation payload correspondence; validate the entire Decision revision graph and reject hidden cycles; distinguish exact-head gate authority from descendant-head work continuation; resume implementation/remediation/Spec Loop work; route `ready_for_final_hrb` to Final HRB and `ready_for_spec_hrb` to Spec HRB; validate prior-Decision-driven carry-forward; reject omitted unresolved/remediation-required Findings; and reject foreign/non-owning `source_round_ref` values. They also retain the earlier transition, contradiction, stale-head, and legacy fail-closed checks.
 

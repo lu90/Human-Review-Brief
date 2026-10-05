@@ -69,7 +69,7 @@ HRB Orchestrator
 The default runtime shape is **one orchestrator plus two isolated worker roles**:
 
 1. **Reviewer** — one primary runtime role with two execution modes:
-   - **Fresh Review mode** — inspect the fixed base→current-head PR without prior findings and produce evidence-backed Raw Findings plus the Review Coverage Manifest.
+   - **Fresh Review mode** — inspect the fixed PR scope without prior findings and produce evidence-backed Raw Findings plus the Review Coverage Manifest; section 18.1 permits bounded delta review after the first full round.
    - **Remediation Review mode** — for round 2+, inspect the previous-review-head→current-head remediation delta with prior findings available, while current-round Fresh Review findings remain excluded.
 2. **Brief Compiler** — receive the fixed review scope, raw findings, remediation results when applicable, and their primary evidence; classify human attention and produce the bounded Human Review Brief.
 
@@ -99,7 +99,7 @@ For review round 2 or later, the orchestration scope MUST also record:
 - previous review head SHA;
 - prior Review Round Record reference.
 
-Round 1 uses one canonical not-applicable encoding: `previous_review_head: null` and `remediation_verification: null`. These round fields do not replace the fixed base→current-head scope of the fresh independent review.
+Round 1 uses one canonical not-applicable encoding: `previous_review_head: null` and `remediation_verification: null`. The PR remains bound to its base and current head; section 18.1 determines the independent Fresh Review execution scope in subsequent rounds.
 
 HRB begins with the base→head diff and expands context only when necessary to interpret the change.
 
@@ -401,7 +401,7 @@ Fixed point, head, spec/ticket sources, verification sources, and review-round m
 Reviewer isolation status/method, Brief Compiler isolation status/method, and Review Coverage Manifest for all required specialist dimensions.
 
 ## Remediation verification
-For review round 2+, summarize previous-head→current-head remediation results without replacing the fresh base→current-head review.
+For review round 2+, summarize previous-head→current-head remediation results without replacing the independent Fresh Review under section 18.1.
 
 ## What changed
 Up to 5 notable changes.
@@ -616,13 +616,13 @@ HRB MUST guard against:
 
 ### `review`
 
-Run a fresh independent review for the fixed base→current-head PR scope and produce the bounded Human Review Brief.
+Run a fresh independent review for the fixed PR scope and produce the bounded Human Review Brief. Round 1 is full base→current-head; later rounds may use the eligible delta scope in section 18.1.
 
 ### `remediation-review`
 
 For review round 2 or later, compare previous-review-head→current-head against prior findings after the fresh independent review is complete.
 
-Remediation review MAY receive the prior Review Round Record and prior findings. It MUST NOT replace or contaminate the fresh base→current-head independent review.
+Remediation review MAY receive the prior Review Round Record and prior findings. It MUST NOT replace or contaminate the independent Fresh Review, whether full or an eligible delta review.
 
 Each prior finding SHOULD be classified as one of:
 
@@ -735,7 +735,7 @@ For round 2 or later, HRB uses two separate views:
 
 ```text
 Fresh Independent Review
-base → current head
+base → current head, or eligible delta plus affected context (18.1)
 prior findings hidden from Reviewer
 
 Remediation Verification
@@ -743,11 +743,36 @@ previous review head → current head
 + prior Review Round Record / prior findings
 ```
 
-The fresh review answers: **Is the PR, as it exists now, acceptable to inspect as a whole?**
+The fresh review answers: **What new issues does the current review scope reveal, and is complete PR coverage preserved?**
 
 Remediation verification answers: **What changed since the previous review, and were the previous findings actually addressed?**
 
 The Orchestrator MUST run the fresh independent review before remediation verification so prior findings do not anchor the fresh Reviewer.
+
+### 18.1 Bounded subsequent review
+
+Round 1 MUST use `fresh_review.scope: base_to_current_head`. Later rounds MAY use `previous_review_head_to_current_head` plus affected dependencies and contracts only when the same repository, PR, base, review stage and authoritative scope remain applicable, descendant ancestry is proven, impact is bounded, and complete independent prior coverage is recoverable. All eight dimensions still assess the delta. Diff size alone does not establish eligibility.
+
+Require a full review for a changed base, Spec, review policy or shared authority; broad, cross-cutting or high-risk changes; uncertain impact; missing, malformed, stale or non-independent prior evidence; or a Reviewer request. A changed repository/PR/base requires the applicable new lineage. Record the escalation reason. The Reviewer independently checks the impact boundary and may expand it or demand full review. Do not add a profiling agent, whole-repository startup scan or persistent cache.
+
+The following optional `fresh_review.review_basis` extension keeps `schema_version: 1` and existing full-review records readable. It is mandatory for delta reviews and for any full review used as a reusable baseline:
+
+- `review_head`: the exact current Round head.
+- `authority_snapshot`: `scope_refs` (non-empty array of immutable Spec/scope references), `review_policy_ref` (base-pinned policy reference, or explicit `none@<base SHA>`), and `shared_contract_refs` (array of immutable contract references, possibly empty). Compare exact values across reuse; a locator update alone cannot imply equal content.
+- `coverage`: exactly the eight dimension keys. Each contains `newly_reviewed_scope_refs` (non-empty unique scope locators) and `reused_scope` (array, empty for full review). A reused item has exactly `source_round_ref`, `source_head`, and non-empty unique `scope_refs`. Scope locators identify bounded primary artifacts or contracts; their content is pinned by the containing/source Round head. They MUST be specific enough to establish what remained unaffected, rather than an opaque whole-PR label.
+- `delta_eligibility`: required only for delta, with `prior_round_ref` and `evidence_ref`. The prior reference identifies the immediately preceding Round; the evidence reference resolves to primary factual eligibility evidence rather than a reviewer conclusion. Full review omits this field.
+
+Eligibility evidence MUST bind `repository`, `pr`, `base_sha`, `review_stage`, `previous_review_head`, and `current_review_head` to this transition. It contains `descendant: true`, `full_review_reasons: []`, `required_review_scope_refs` (non-empty changed and impacted scope locators), and `unchanged_scope_refs` (scope locators proven unaffected). Preserve `primary_evidence_refs` for the Git ancestry/diff, dependency/contract impact assessment and authority-version comparison. These are inspected facts: a self-asserted boolean or non-empty URL is not proof. An unresolved evidence reference fails closed to full review. The Orchestrator resolves the evidence and supplies the checked facts to deterministic validation; tests of supplied facts do not claim to execute Git or prove semantic impact.
+
+For each dimension, newly reviewed scope MUST include every required delta/impact scope. Every scope covered in the previous dimension MUST either be newly reviewed or explicitly reused. Each reused item MUST reference the immediately preceding same-lineage Round and exact head, belong to that prior dimension's recorded coverage, and appear in the resolved unchanged-scope evidence. Newly reviewed and reused scope cannot overlap. Validate reused chains back to a full baseline, including isolation, authority versions and evidence at every transition. Missing coverage, broken links, contradictory pins or stale heads invalidate delta eligibility. A full legacy Round without `review_basis` remains valid but cannot establish an invented reuse baseline; run a full review to establish one.
+
+`coverage_manifest` continues to use `reviewed_with_findings` / `reviewed_no_finding` for this round's newly reviewed scope, preserving the Fresh Finding consistency checks below. `review_basis.coverage` separately exposes reused coverage; it does not recast old findings as current no-finding results. Finding continuity, separate remediation and exact-head human Decision requirements remain unchanged.
+
+Fresh handoffs add only `review_scope` and `sanitized_coverage_basis`. Build the latter from fixed pins, authority versions, dimension/scope locators and primary eligibility evidence. Remove finding IDs/counts, review results, dispositions, conclusions and author rationale, including from linked records. Never pass the complete prior Round or Decision to Fresh Review. The Brief Compiler receives the complete factual `review_basis` and clearly distinguishes new coverage from reused coverage. Coverage reuse never supplies approval for a new head.
+
+The Orchestrator MUST validate the selected scope and reuse chain before launching a delta review and again against the Reviewer's returned coverage before persisting/routing the round. Validate ordinary Round, payload, transition and Finding-continuity contracts as well; reuse validation does not replace them. Any failed eligibility check selects full review; it does not waive a review dimension or an unresolved finding.
+
+### 18.2 Durable round record
 
 After each completed round, the Orchestrator MUST produce a **Review Round Record** containing at minimum:
 

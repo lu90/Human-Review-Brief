@@ -17,6 +17,7 @@ VALID_ISOLATION_STATUS = %w[achieved unavailable].freeze
 ACHIEVED_ISOLATION_METHODS = %w[fresh_context isolated_subagent runtime_enforced].freeze
 ALL_ISOLATION_METHODS = %w[fresh_context isolated_subagent runtime_enforced shared_context unknown].freeze
 VALID_COVERAGE = %w[reviewed_with_findings reviewed_no_finding].freeze
+VALID_FRESH_SCOPES = %w[base_to_current_head previous_review_head_to_current_head].freeze
 VALID_REMEDIATION_STATUS = %w[
   resolved
   partially_resolved
@@ -505,6 +506,142 @@ def deep_copy(value)
   Marshal.load(Marshal.dump(value))
 end
 
+def unique_scope_refs?(value, allow_empty: false)
+  value.is_a?(Array) && (allow_empty || !value.empty?) &&
+    value.all? { |ref| ref.is_a?(String) && !ref.strip.empty? } && value.uniq == value
+end
+
+def review_basis_errors(round)
+  fresh = round["fresh_review"]
+  return ["fresh_review must be a mapping"] unless fresh.is_a?(Hash)
+
+  errors = []
+  scope = fresh["scope"]
+  errors << "invalid Fresh Review scope" unless VALID_FRESH_SCOPES.include?(scope)
+  delta = scope == "previous_review_head_to_current_head"
+  errors << "round 1 requires full review" if delta && round["round"] == 1
+  basis = fresh["review_basis"]
+  return errors unless delta || fresh.key?("review_basis")
+  return errors + ["review_basis must be a mapping"] unless basis.is_a?(Hash)
+
+  errors << "review_basis head is stale" unless basis["review_head"] == round["current_review_head"]
+  authority = basis["authority_snapshot"]
+  if authority.is_a?(Hash) && authority.keys.sort == %w[scope_refs review_policy_ref shared_contract_refs].sort
+    errors << "authority scope_refs must be unique non-empty refs" unless unique_scope_refs?(authority["scope_refs"])
+    errors << "authority review_policy_ref missing" unless authority["review_policy_ref"].is_a?(String) && !authority["review_policy_ref"].strip.empty?
+    errors << "authority shared_contract_refs invalid" unless unique_scope_refs?(authority["shared_contract_refs"], allow_empty: true)
+  else
+    errors << "authority_snapshot fields invalid"
+  end
+
+  coverage = basis["coverage"]
+  return errors + ["review_basis coverage dimensions incomplete"] unless coverage.is_a?(Hash) && coverage.keys.sort == DIMENSIONS.sort
+
+  coverage.each do |dimension, item|
+    unless item.is_a?(Hash) && item.keys.sort == %w[newly_reviewed_scope_refs reused_scope].sort
+      errors << "#{dimension} coverage fields invalid"
+      next
+    end
+    reviewed = item["newly_reviewed_scope_refs"]
+    errors << "#{dimension} newly reviewed scopes invalid" unless unique_scope_refs?(reviewed)
+    reused = item["reused_scope"]
+    unless reused.is_a?(Array)
+      errors << "#{dimension} reused_scope must be an array"
+      next
+    end
+    errors << "full review cannot reuse coverage" if !delta && !reused.empty?
+    reused_refs = []
+    reused.each do |entry|
+      unless entry.is_a?(Hash) && entry.keys.sort == %w[source_round_ref source_head scope_refs].sort
+        errors << "#{dimension} reused entry fields invalid"
+        next
+      end
+      errors << "#{dimension} reused source ref missing" unless entry["source_round_ref"].is_a?(String) && !entry["source_round_ref"].strip.empty?
+      errors << "#{dimension} reused source head invalid" unless entry["source_head"].is_a?(String) && entry["source_head"].match?(/\A[0-9a-f]{40}\z/)
+      if unique_scope_refs?(entry["scope_refs"])
+        reused_refs.concat(entry["scope_refs"])
+      else
+        errors << "#{dimension} reused scopes invalid"
+      end
+    end
+    errors << "#{dimension} duplicate reused scope" unless reused_refs.uniq == reused_refs
+    errors << "#{dimension} new and reused scopes overlap" if reviewed.is_a?(Array) && !(reviewed & reused_refs).empty?
+  end
+
+  eligibility = basis["delta_eligibility"]
+  if delta
+    unless eligibility.is_a?(Hash) && eligibility.keys.sort == %w[prior_round_ref evidence_ref].sort && eligibility.values.all? { |value| value.is_a?(String) && !value.strip.empty? }
+      errors << "delta_eligibility fields invalid"
+    end
+  elsif basis.key?("delta_eligibility")
+    errors << "full review cannot declare delta_eligibility"
+  end
+  errors
+end
+
+def covered_scope_refs(item)
+  item["newly_reviewed_scope_refs"] + item["reused_scope"].flat_map { |entry| entry["scope_refs"] }
+end
+
+def review_scope_errors(round, lineage_records, evidence_by_ref, visited = [])
+  errors = review_basis_errors(round)
+  return errors unless errors.empty?
+  return errors unless round.dig("fresh_review", "scope") == "previous_review_head_to_current_head"
+  return ["coverage lineage cycle"] if visited.include?(round["record_ref"])
+
+  fresh = round["fresh_review"]
+  errors << "delta reviewer isolation unavailable" unless fresh.dig("reviewer_isolation", "status") == "achieved" && ACHIEVED_ISOLATION_METHODS.include?(fresh.dig("reviewer_isolation", "method"))
+  basis = fresh["review_basis"]
+  eligibility = basis["delta_eligibility"]
+  matches = lineage_records.select { |record| record["record_ref"] == eligibility["prior_round_ref"] }
+  return errors + ["prior coverage record missing or duplicated"] unless matches.length == 1
+  previous = matches.first
+  %w[repository pr base_sha review_stage].each do |key|
+    errors << "coverage lineage #{key} changed" unless round[key] == previous[key]
+  end
+  errors << "coverage rounds are not consecutive" unless previous["round"].is_a?(Integer) && round["round"] == previous["round"] + 1
+  errors << "coverage prior head mismatch" unless round["previous_review_head"] == previous["current_review_head"]
+  errors << "coverage and remediation prior refs differ" unless round.dig("remediation_verification", "prior_round_ref") == previous["record_ref"]
+  prior_fresh = previous["fresh_review"]
+  unless prior_fresh.is_a?(Hash) && prior_fresh.dig("reviewer_isolation", "status") == "achieved" && ACHIEVED_ISOLATION_METHODS.include?(prior_fresh.dig("reviewer_isolation", "method")) && prior_fresh["prior_findings_visible_to_reviewer"] == false
+    errors << "prior independent coverage unavailable"
+  end
+  prior_manifest = prior_fresh && prior_fresh["coverage_manifest"]
+  errors << "prior coverage manifest incomplete" unless prior_manifest.is_a?(Hash) && prior_manifest.keys.sort == DIMENSIONS.sort && prior_manifest.values.all? { |status| VALID_COVERAGE.include?(status) }
+  previous_basis = prior_fresh && prior_fresh["review_basis"]
+  return errors + ["prior reusable coverage baseline missing"] unless previous_basis.is_a?(Hash)
+  prior_errors = review_scope_errors(previous, lineage_records, evidence_by_ref, visited + [round["record_ref"]])
+  return errors + prior_errors.map { |error| "prior coverage: #{error}" } unless prior_errors.empty?
+  errors << "coverage authority changed" unless basis["authority_snapshot"] == previous_basis["authority_snapshot"]
+
+  evidence = evidence_by_ref[eligibility["evidence_ref"]]
+  return errors + ["delta eligibility evidence unresolved"] unless evidence.is_a?(Hash)
+  %w[repository pr base_sha review_stage previous_review_head current_review_head].each do |key|
+    errors << "eligibility evidence #{key} mismatch" unless evidence[key] == round[key]
+  end
+  errors << "descendant ancestry unproven" unless evidence["descendant"] == true
+  errors << "full review required" unless evidence["full_review_reasons"] == []
+  errors << "primary eligibility evidence missing" unless unique_scope_refs?(evidence["primary_evidence_refs"])
+  required = evidence["required_review_scope_refs"]
+  unchanged = evidence["unchanged_scope_refs"]
+  return errors + ["eligibility scope facts invalid"] unless unique_scope_refs?(required) && unique_scope_refs?(unchanged, allow_empty: true)
+  errors << "required and unchanged scope facts overlap" unless (required & unchanged).empty?
+
+  DIMENSIONS.each do |dimension|
+    item = basis["coverage"][dimension]
+    newly_reviewed = item["newly_reviewed_scope_refs"]
+    errors << "#{dimension} required delta scope omitted" unless (required - newly_reviewed).empty?
+    prior_scopes = covered_scope_refs(previous_basis["coverage"][dimension])
+    errors << "#{dimension} previous coverage dropped" unless (prior_scopes - covered_scope_refs(item)).empty?
+    item["reused_scope"].each do |entry|
+      errors << "#{dimension} reused source is not the previous round/head" unless entry["source_round_ref"] == previous["record_ref"] && entry["source_head"] == previous["current_review_head"]
+      errors << "#{dimension} reused scope absent from prior coverage" unless (entry["scope_refs"] - prior_scopes).empty?
+      errors << "#{dimension} reused scope not proven unchanged" unless (entry["scope_refs"] - unchanged).empty?
+    end
+  end
+  errors
+end
+
 def validate_round_record(round, label)
   fail_contract("#{label} must be a mapping") unless round.is_a?(Hash)
   fail_contract("#{label}: schema_version must be 1") unless round["schema_version"] == 1
@@ -542,7 +679,8 @@ def validate_round_record(round, label)
 
   fresh = round["fresh_review"]
   fail_contract("#{label}: missing fresh_review") unless fresh.is_a?(Hash)
-  fail_contract("#{label}: fresh_review.scope must be base_to_current_head") unless fresh["scope"] == "base_to_current_head"
+  basis_errors = review_basis_errors(round)
+  fail_contract("#{label}: #{basis_errors.join('; ')}") unless basis_errors.empty?
   fail_contract("#{label}: fresh reviewer must not receive prior findings") unless fresh["prior_findings_visible_to_reviewer"] == false
   validate_isolation(fresh["reviewer_isolation"], "#{label}.fresh_review.reviewer_isolation")
   require_nonempty_string(fresh["raw_findings_ref"], "#{label}.fresh_review.raw_findings_ref")
@@ -1003,12 +1141,13 @@ partial_decision_path = "fixtures/hrb-0/review-decision-record-partial.example.y
 decision_path = "fixtures/hrb-0/review-decision-record.example.yaml"
 payload_comments_path = "fixtures/hrb-0/review-payload-comments.example.yaml"
 project_context_path = "fixtures/hrb-0/project-context.example.yaml"
+delta_review_path = "fixtures/hrb-0/delta-review.example.yaml"
 policy_path = ".hrb/REVIEW_POLICY.md"
 fresh_handoff_path = "handoffs/fresh-review.md"
 remediation_handoff_path = "handoffs/remediation-review.md"
 compiler_handoff_path = "handoffs/brief-compiler.md"
 
-[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, round1_decision_path, partial_decision_path, decision_path, payload_comments_path, project_context_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
+[product_spec_path, skill_path, human_path, readme_path, cases_path, round1_path, round2_path, round1_decision_path, partial_decision_path, decision_path, payload_comments_path, project_context_path, delta_review_path, policy_path, fresh_handoff_path, remediation_handoff_path, compiler_handoff_path].each do |path|
   fail_contract("missing #{path}") unless File.file?(path)
 end
 
@@ -1296,6 +1435,8 @@ validate_handoff_template(
     review_stage
     base_sha
     current_head_sha
+    review_scope
+    sanitized_coverage_basis
     originating_spec_refs
     change_artifacts
     relevant_repository_context
@@ -1356,6 +1497,8 @@ validate_handoff_template(
     previous_review_head
     raw_findings
     coverage_manifest
+    review_scope
+    review_basis
     reviewer_isolation
     remediation_results
     remediation_reviewer_isolation
@@ -1872,6 +2015,82 @@ cross_pr_progress = deep_copy(linked_progress)
 cross_pr_progress["pr"] = destination_pr
 cross_pr_route, cross_pr_continuation_errors = continuation_route(spec_approve, linked_spec_round, advanced_head, ancestry, cross_pr_progress)
 fail_contract("split progress reused the old PR Decision") unless cross_pr_route == "blocked" && cross_pr_continuation_errors.include?("progress PR mismatch")
+
+delta_suite = YAML.safe_load(File.read(delta_review_path), aliases: false)
+fail_contract("delta fixture identity invalid") unless delta_suite["version"] == 1 && delta_suite["suite"] == "HRB-0-delta-review"
+coverage_baseline = deep_copy(round1)
+coverage_baseline["fresh_review"]["review_basis"] = delta_suite["full_review_basis"]
+delta_round = deep_copy(round2)
+delta_round["fresh_review"]["scope"] = "previous_review_head_to_current_head"
+delta_round["fresh_review"]["review_basis"] = delta_suite["delta_review_basis"]
+delta_evidence = delta_suite["eligibility_evidence"]
+validate_round_record(coverage_baseline, "reusable full baseline")
+validate_round_record(delta_round, "eligible delta round")
+delta_errors = review_scope_errors(delta_round, [coverage_baseline], delta_evidence)
+fail_contract("eligible delta rejected: #{delta_errors.join('; ')}") unless delta_errors.empty?
+validate_round_transition(coverage_baseline, delta_round, "delta transition")
+validate_round_lineage(coverage_baseline, delta_round, round1_decision, [coverage_baseline], "delta Finding continuity")
+validate_decision_record(decision, delta_round, "delta exact-head decision")
+fail_contract("delta reuse transferred approval to new head") unless gate_route_for_head(round1_decision, coverage_baseline, delta_round["current_review_head"]) == "blocked"
+
+# The second delta must recover every earlier eligibility link back to the full baseline.
+third_delta = deep_copy(delta_round)
+third_delta["round"] = 3
+third_delta["record_ref"] = "hrb://github/lu90/example/pull/123/review-round/3@#{'4' * 40}"
+third_delta["previous_review_head"] = delta_round["current_review_head"]
+third_delta["current_review_head"] = "4" * 40
+third_delta["remediation_verification"]["prior_round_ref"] = delta_round["record_ref"]
+third_basis = third_delta["fresh_review"]["review_basis"]
+third_basis["review_head"] = third_delta["current_review_head"]
+third_basis["delta_eligibility"] = { "prior_round_ref" => delta_round["record_ref"], "evidence_ref" => "fixture://delta-eligibility/round-3" }
+third_basis["coverage"].each_value do |item|
+  item["reused_scope"].each do |entry|
+    entry["source_round_ref"] = delta_round["record_ref"]
+    entry["source_head"] = delta_round["current_review_head"]
+  end
+end
+third_evidence = deep_copy(delta_evidence)
+third_facts = deep_copy(third_evidence.values.first)
+third_facts["previous_review_head"] = third_delta["previous_review_head"]
+third_facts["current_review_head"] = third_delta["current_review_head"]
+third_evidence["fixture://delta-eligibility/round-3"] = third_facts
+third_errors = review_scope_errors(third_delta, [coverage_baseline, delta_round], third_evidence)
+fail_contract("chained delta rejected: #{third_errors.join('; ')}") unless third_errors.empty?
+fail_contract("broken earlier eligibility link accepted") if review_scope_errors(third_delta, [coverage_baseline, delta_round], { "fixture://delta-eligibility/round-3" => third_facts }).empty?
+
+delta_negative_cases = {
+  "stale basis head" => ->(current, _prior, _facts) { current["fresh_review"]["review_basis"]["review_head"] = "9" * 40 },
+  "missing dimension" => ->(current, _prior, _facts) { current["fresh_review"]["review_basis"]["coverage"].delete("security_privacy") },
+  "stage changed" => ->(current, _prior, _facts) { current["review_stage"] = "spec_review" },
+  "foreign PR" => ->(current, _prior, _facts) { current["pr"] = 999 },
+  "base changed" => ->(current, _prior, _facts) { current["base_sha"] = "9" * 40 },
+  "authority changed" => ->(current, _prior, _facts) { current["fresh_review"]["review_basis"]["authority_snapshot"]["scope_refs"] = ["changed-spec"] },
+  "old full lacks baseline" => ->(_current, prior, _facts) { prior["fresh_review"].delete("review_basis") },
+  "prior isolation unavailable" => ->(_current, prior, _facts) { prior["fresh_review"]["reviewer_isolation"]["status"] = "unavailable" },
+  "prior manifest incomplete" => ->(_current, prior, _facts) { prior["fresh_review"]["coverage_manifest"].delete("security_privacy") },
+  "unproven ancestry" => ->(_current, _prior, facts) { facts.values.first["descendant"] = false },
+  "stale evidence head" => ->(_current, _prior, facts) { facts.values.first["current_review_head"] = "9" * 40 },
+  "full escalation" => ->(_current, _prior, facts) { facts.values.first["full_review_reasons"] = ["uncertain_impact"] },
+  "no primary evidence" => ->(_current, _prior, facts) { facts.values.first["primary_evidence_refs"] = [] },
+  "unproven unchanged scope" => ->(_current, _prior, facts) { facts.values.first["unchanged_scope_refs"] = [] },
+  "required impact omitted" => ->(_current, _prior, facts) { facts.values.first["required_review_scope_refs"] << "src/caller.rb" },
+  "coverage dropped" => ->(current, _prior, _facts) { current["fresh_review"]["review_basis"]["coverage"]["spec_scope"]["reused_scope"] = [] },
+  "reuse source stale" => ->(current, _prior, _facts) { current["fresh_review"]["review_basis"]["coverage"]["spec_scope"]["reused_scope"].first["source_head"] = "9" * 40 },
+  "reuse absent from prior" => ->(current, _prior, facts) { current["fresh_review"]["review_basis"]["coverage"]["spec_scope"]["reused_scope"].first["scope_refs"] << "src/unreviewed.rb"; facts.values.first["unchanged_scope_refs"] << "src/unreviewed.rb" }
+}
+delta_negative_cases.each do |name, mutate|
+  current = deep_copy(delta_round)
+  prior = deep_copy(coverage_baseline)
+  facts = deep_copy(delta_evidence)
+  mutate.call(current, prior, facts)
+  fail_contract("negative delta check accepted #{name}") if review_scope_errors(current, [prior], facts).empty?
+end
+first_delta = deep_copy(delta_round)
+first_delta["round"] = 1
+fail_contract("round 1 delta accepted") if review_basis_errors(first_delta).empty?
+fail_contract("missing prior lineage accepted") if review_scope_errors(delta_round, [], delta_evidence).empty?
+fail_contract("duplicate prior lineage accepted") if review_scope_errors(delta_round, [coverage_baseline, coverage_baseline], delta_evidence).empty?
+fail_contract("unresolved eligibility evidence accepted") if review_scope_errors(delta_round, [coverage_baseline], {}).empty?
 
 policy_text = File.read(policy_path)
 fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")

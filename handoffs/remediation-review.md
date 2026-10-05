@@ -83,7 +83,7 @@ Return only remediation results for the supplied prior findings.
 
 Do not:
 
-- replace the fresh base-to-current-head review;
+- replace the independent Fresh Review, whether full or an eligible delta review;
 - search for unrelated new general findings;
 - consume current-round Fresh Review findings;
 - assign A1-A4;
