@@ -492,3 +492,73 @@ cases:
       - invent a Review Decision Record for an old round
       - convert absence of a decision into approval
 
+
+  - id: C24_FINAL_V2_COMPILATION
+    title: Final v2 compiles existing evidence without specialist work
+    input:
+      contract_version: hrb-final-v2
+      review_stage: final_review
+    expected:
+      route: lightweight_final
+      required_evidence_owner_return: true
+      coverage_loss_disclosed: true
+      code_review_inherits_eight_dimensions: false
+    must_not:
+      - run fresh technical audit tests or independent remediation verification in Final v2
+      - treat removed specialist coverage as missing required evidence
+
+  - id: C25_STAGE_VERSION_DISPATCH
+    title: Independent Spec and legacy work retain their fixed contract
+    input:
+      stages: [spec_review, final_review]
+      versions: [hrb-v1, hrb-final-v2, unknown]
+    expected:
+      spec_remains_independent: true
+      unknown_version_route: blocked
+      legacy_examples_unchanged: true
+    must_not:
+      - downgrade unknown versions to v1 or use v2 for Spec
+
+  - id: C26_FINAL_V2_RECOVERY
+    title: Same-head brief and real-source Decision recover without ambiguity
+    input:
+      round_fixture: final-review-v2.example.yaml
+      decision_fixture: final-decision-v2.example.yaml
+    expected:
+      exact_head_required: true
+      full_revision_graph_required: true
+      actual_payload_body_required: true
+    must_not:
+      - infer approval from missing source or timestamps
+
+  - id: C27_EXPLICIT_CONTRACT_SWITCH
+    title: In-flight switch preserves unresolved findings and permissions
+    input:
+      transition_fixture: contract-transition-v2.example.yaml
+    expected:
+      explicit_owner_source_required: true
+      unresolved_continuity_required: true
+      permissions_preserved: true
+    must_not:
+      - silently switch in-flight work or transfer old approval to new head
+
+  - id: C28_FINAL_EVIDENCE_REUSE
+    title: Existing factual evidence is reused only when still applicable
+    input:
+      changed_inputs: [head, scope, dependency, shared_contract]
+    expected:
+      original_execution_identity_preserved: true
+      affected_checks_return_to_owner: true
+    must_not:
+      - label old-head evidence as current execution or reuse human approval
+
+  - id: C29_CANDIDATE_AUTHORITY_BOUNDARY
+    title: Workflow B cannot self-approve through its proposed contract
+    input:
+      candidate: WORKFLOW-EVOLUTION-B
+      governing_contract: hrb-v1
+    expected:
+      fixed_pre_b_authority_required: true
+      separate_switch_approval_required: true
+    must_not:
+      - let candidate policy or references waive their own review

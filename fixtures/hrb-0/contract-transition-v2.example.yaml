@@ -1,0 +1,31 @@
+schema_version: 2
+artifact: hrb-contract-transition
+record_ref: hrb://github/lu90/example/pull/123/contract-transition/v1-to-v2@4444444444444444444444444444444444444444
+repository: lu90/example
+pr: 123
+base_sha: '1111111111111111111111111111111111111111'
+current_head: '4444444444444444444444444444444444444444'
+current_state: final_hrb
+old_contract_version: hrb-v1
+new_contract_version: hrb-final-v2
+old_contract_ref: fixture://hrb-v1@0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c
+new_contract_ref: fixture://effective-hrb-final-v2@cccccccccccccccccccccccccccccccccccccccc
+source_round_ref: hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333
+source_decision_ref: hrb://github/lu90/example/pull/123/decision/final_review/round-2/rev-2@3333333333333333333333333333333333333333
+decision_source:
+  decided_by: fixture-owner
+  recorded_by: orchestrator
+  source_kind: human_statement
+  captured_statement: 'Fixture only: switch this in-flight Final from hrb-v1 to hrb-final-v2 at the stated
+    head, keep R2-RF-01 and R2-RF-02 unresolved and retain the existing authorized scope. This is not approval
+    of the new head.'
+  durable_source_ref: null
+authorization_scope_refs:
+- fixture://approved-write-scope
+evidence_applicability_refs:
+- fixture://switch-evidence@4444444444444444444444444444444444444444
+finding_map:
+- finding_id: R2-RF-01
+  source_round_ref: hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333
+- finding_id: R2-RF-02
+  source_round_ref: hrb://github/lu90/example/pull/123/review-round/2@3333333333333333333333333333333333333333
