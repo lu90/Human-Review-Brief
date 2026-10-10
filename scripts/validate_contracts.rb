@@ -261,8 +261,35 @@ def final_evidence_errors(round, readiness: true, resolved: nil)
   errors
 end
 
+# Resolve a v1 carry pointer through its unchanged legacy records. This only
+# identifies the expected emitter; consumers still validate its record/payloads.
+# V2 pointers are already canonical and must never be normalized this way.
+def legacy_finding_origin_ref(previous, finding_id, lineage_records)
+  source = previous
+  loop do
+    return nil unless record_contract(source) == "hrb-v1"
+    validate_round_record(source, "legacy Finding #{finding_id} origin path")
+    yield source if block_given?
+    return source["record_ref"] if Array(source.dig("fresh_review", "finding_ids")).include?(finding_id)
+
+    inherited = Array(source.dig("finding_continuity", "inherited"))
+    pointers = inherited.select { |item| item.is_a?(Hash) && item["finding_id"] == finding_id }
+    return nil unless pointers.length == 1
+
+    candidates = lineage_records.select { |record| record["record_ref"] == pointers.first["source_round_ref"] }
+    return nil unless candidates.length == 1
+
+    prior = candidates.first
+    same_lineage = %w[repository pr base_sha review_stage].all? { |key| prior[key] == previous[key] }
+    earlier = prior["round"].is_a?(Integer) && source["round"].is_a?(Integer) && prior["round"] < source["round"]
+    return nil unless same_lineage && earlier && Array(decision_scope_ids(prior)).include?(finding_id)
+
+    source = prior
+  end
+end
+
 # Validate a persisted switch before a later Final Round exists. This does not open a gate.
-def transition_record_errors(transition, previous, previous_decision, facts)
+def transition_record_errors(transition, previous, previous_decision, facts, lineage_records: [])
   return ["explicit contract switch missing; return to Orchestrator"] unless transition.is_a?(Hash)
 
   errors = []
@@ -290,13 +317,16 @@ def transition_record_errors(transition, previous, previous_decision, facts)
     errors << "switch Finding map duplicates" unless ids.uniq == ids
     required = required_carry_ids(previous, previous_decision)
     errors << "switch lost unresolved Findings" unless (required - ids).empty?
-    # Preserve the source pointer; consumers must also prove emission for legacy inherited IDs.
+    # Legacy carry pointers may name intermediaries; resolve without rewriting history.
     emitted_ids = record_contract(previous) == FINAL_CONTRACT ? previous.fetch("findings", []).map { |item| item["finding_id"] } : previous.dig("fresh_review", "finding_ids")
     prior_inherited = previous.dig("finding_continuity", "inherited") || []
     mapping.each do |item|
       id = item["finding_id"]
       inherited = prior_inherited.find { |candidate| candidate["finding_id"] == id }
       expected_source = Array(emitted_ids).include?(id) ? previous["record_ref"] : inherited && inherited["source_round_ref"]
+      if inherited && record_contract(previous) == "hrb-v1"
+        expected_source = legacy_finding_origin_ref(previous, id, lineage_records)
+      end
       if !nonempty?(item["source_round_ref"])
         errors << "switch Finding #{id} source_round_ref missing"
       elsif !nonempty?(expected_source) || item["source_round_ref"] != expected_source
@@ -318,9 +348,43 @@ def transition_record_errors(transition, previous, previous_decision, facts)
   errors
 end
 
+# Prove the selected original emitter from persisted records, never a supplied
+# source-validity flag alone. Both standalone and later-Final switches use this.
+def transition_emission_errors(transition, previous, history, comments)
+  errors = []
+  mapping = transition.is_a?(Hash) ? transition["finding_map"] : nil
+  if mapping.is_a?(Array) && mapping.all? { |item| item.is_a?(Hash) }
+    mapping.each do |item|
+      label = "switch Finding #{item['finding_id']}"
+      inherited = Array(previous.dig("finding_continuity", "inherited"))
+      if record_contract(previous) == "hrb-v1" && inherited.any? { |entry| entry.is_a?(Hash) && entry["finding_id"] == item["finding_id"] }
+        origin = legacy_finding_origin_ref(previous, item["finding_id"], history) do |source|
+          # The immediate source and mapped emitter have their existing payload checks.
+          next if [previous["record_ref"], item["source_round_ref"]].include?(source["record_ref"])
+          errors.concat(resolve_round_payloads(source, comments))
+        end
+        errors << "#{label} original source mismatch" unless origin == item["source_round_ref"]
+      end
+      sources = history.select { |record| record["record_ref"] == item["source_round_ref"] }
+      unless sources.length == 1
+        errors << "#{label} original emission unproven"
+        next
+      end
+      source = sources.first
+      validate_round_record(source, "#{label} emitting source Round")
+      same_lineage = %w[repository pr base_sha review_stage].all? { |key| source[key] == previous[key] } && source["round"] <= previous["round"]
+      errors << "#{label} emitting source outside prior lineage" unless same_lineage
+      emitted_ids = record_contract(source) == FINAL_CONTRACT ? source.fetch("findings", []).map { |finding| finding["finding_id"] } : source.dig("fresh_review", "finding_ids")
+      errors << "#{label} source Round did not emit Finding" unless Array(emitted_ids).include?(item["finding_id"])
+      errors.concat(resolve_round_payloads(source, comments))
+    end
+  end
+  errors
+end
+
 # A continuation Round must additionally bind the persisted switch and carried Findings.
-def transition_errors(transition, previous, current, previous_decision, facts)
-  errors = transition_record_errors(transition, previous, previous_decision, facts)
+def transition_errors(transition, previous, current, previous_decision, facts, lineage_records: [])
+  errors = transition_record_errors(transition, previous, previous_decision, facts, lineage_records: lineage_records)
   return errors unless transition.is_a?(Hash)
 
   %w[repository pr base_sha].each { |key| errors << "switch #{key} mismatch" unless transition[key] == current[key] }
@@ -362,6 +426,20 @@ def recover_final_gate(comments, round_ref, current_head, resolved_evidence, aut
     history.concat(records)
     errors.concat(history_errors)
   end
+  # A current-PR canonical locator is scope evidence even if identity fields are damaged.
+  history_ref_prefix = "hrb://github/#{round['repository']}/pull/#{round['pr']}/review-round/"
+  history_discovery_ref = "github-pr-comments://#{round['repository']}/pull/#{round['pr']}"
+  history.each do |item|
+    located_here = item["record_ref"].is_a?(String) && item["record_ref"].start_with?(history_ref_prefix)
+    located_here ||= %w[storage payload_storage].any? do |key|
+      item[key].is_a?(Hash) && item[key]["discovery_ref"] == history_discovery_ref
+    end
+    identity_matches = nonempty?(item["repository"]) && item["pr"].is_a?(Integer) && item["pr"] > 0 &&
+                       item["repository"] == round["repository"] && item["pr"] == round["pr"]
+    if located_here && !identity_matches
+      errors << "Final history has missing, invalid or contradictory repository/pr for current-PR locator"
+    end
+  end
   history.select! do |item|
     %w[repository pr].all? { |key| item[key] == round[key] }
   end
@@ -394,7 +472,10 @@ def recover_final_gate(comments, round_ref, current_head, resolved_evidence, aut
       if record_contract(previous) != FINAL_CONTRACT
         transition, transition_read_errors = recover_record_by_ref(comments, TRANSITION_MARKER, "hrb-contract-transition", round["transition_ref"])
         errors.concat(transition_read_errors)
-        errors.concat(transition_errors(transition, previous, round, previous_decision, transition_facts)) if transition
+        if transition
+          errors.concat(transition_errors(transition, previous, round, previous_decision, transition_facts, lineage_records: lineage))
+          errors.concat(transition_emission_errors(transition, previous, history, comments))
+        end
       end
     else
       errors << "Final prior lineage/Decision missing"
@@ -770,8 +851,13 @@ def round_lineage_errors(previous, current, previous_decision, lineage_records)
       errors << "Final inherited Finding must retain original emitting Round" unless emitted_ids.is_a?(Array) && emitted_ids.include?(item["finding_id"])
       prior_inherited = previous.dig("finding_continuity", "inherited") || []
       prior_item = prior_inherited.find { |candidate| candidate["finding_id"] == item["finding_id"] }
-      if prior_item && prior_item["source_round_ref"] != item["source_round_ref"]
-        errors << "Final inherited Finding original source changed"
+      if prior_item
+        expected_source = if record_contract(previous) == "hrb-v1"
+                            legacy_finding_origin_ref(previous, item["finding_id"], lineage_records)
+                          else
+                            prior_item["source_round_ref"]
+                          end
+        errors << "Final inherited Finding original source changed" unless expected_source == item["source_round_ref"]
       end
     end
   end
@@ -2512,7 +2598,6 @@ def generated_record_result(check, input)
     errors.concat(resolve_round_payloads(previous, comments))
     transition, transition_read_errors = recover_record_by_ref(comments, TRANSITION_MARKER, "hrb-contract-transition", input.fetch("transition_ref"))
     errors.concat(transition_read_errors)
-    errors.concat(transition_record_errors(transition, previous, previous_decision, input.fetch("facts")))
     # A legacy inherited pointer may identify an intermediary, so prove actual emission.
     history = []
     [ROUND_RECORD_MARKER, FINAL_ROUND_MARKER].each do |source_marker|
@@ -2520,24 +2605,8 @@ def generated_record_result(check, input)
       history.concat(records)
       errors.concat(history_errors)
     end
-    mapping = transition.is_a?(Hash) ? transition["finding_map"] : nil
-    if mapping.is_a?(Array) && mapping.all? { |item| item.is_a?(Hash) }
-      mapping.each do |item|
-        label = "switch Finding #{item['finding_id']}"
-        sources = history.select { |record| record["record_ref"] == item["source_round_ref"] }
-        unless sources.length == 1
-          errors << "#{label} original emission unproven"
-          next
-        end
-        source = sources.first
-        validate_round_record(source, "#{label} emitting source Round")
-        same_lineage = %w[repository pr base_sha review_stage].all? { |key| source[key] == previous[key] } && source["round"] <= previous["round"]
-        errors << "#{label} emitting source outside prior lineage" unless same_lineage
-        emitted_ids = record_contract(source) == FINAL_CONTRACT ? source.fetch("findings", []).map { |finding| finding["finding_id"] } : source.dig("fresh_review", "finding_ids")
-        errors << "#{label} source Round did not emit Finding" unless Array(emitted_ids).include?(item["finding_id"])
-        errors.concat(resolve_round_payloads(source, comments))
-      end
-    end
+    errors.concat(transition_record_errors(transition, previous, previous_decision, input.fetch("facts"), lineage_records: history))
+    errors.concat(transition_emission_errors(transition, previous, history, comments))
     [errors.empty?, errors]
   else
     fail_contract("unknown generated record check #{check.inspect}")
