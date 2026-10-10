@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "yaml"
+require "digest"
 
 VALID_ATTENTION = %w[A1 A2 A3 A4].freeze
 VALID_EVIDENCE_ROLES = %w[
@@ -260,19 +261,19 @@ def final_evidence_errors(round, readiness: true, resolved: nil)
   errors
 end
 
-def transition_errors(transition, previous, current, previous_decision, facts)
+# Validate a persisted switch before a later Final Round exists. This does not open a gate.
+def transition_record_errors(transition, previous, previous_decision, facts)
   return ["explicit contract switch missing; return to Orchestrator"] unless transition.is_a?(Hash)
 
   errors = []
   errors << "switch schema/artifact invalid" unless transition["schema_version"] == 2 && transition["artifact"] == "hrb-contract-transition"
-  %w[repository pr base_sha].each { |key| errors << "switch #{key} mismatch" unless transition[key] == current[key] }
-  errors << "switch head mismatch" unless transition["current_head"] == current["current_review_head"]
+  %w[repository pr base_sha].each { |key| errors << "switch source #{key} mismatch" unless transition[key] == previous[key] }
+  errors << "switch current head invalid" unless sha?(transition["current_head"])
   errors << "switch current state missing" unless nonempty?(transition["current_state"])
-  errors << "switch reference mismatch" unless transition["record_ref"] == current["transition_ref"] && nonempty?(transition["record_ref"])
+  errors << "switch reference missing" unless nonempty?(transition["record_ref"])
   errors << "switch old contract mismatch" unless transition["old_contract_version"] == record_contract(previous)
   errors << "switch new contract mismatch" unless transition["new_contract_version"] == FINAL_CONTRACT
   %w[old_contract_ref new_contract_ref].each { |key| errors << "switch #{key} missing" unless nonempty?(transition[key]) }
-  errors << "switch new authority mismatch" unless transition["new_contract_ref"] == current.dig("authority_snapshot", "effective_contract_ref")
   errors << "switch source Round mismatch" unless transition["source_round_ref"] == previous["record_ref"]
   errors << "switch source Decision mismatch" unless transition["source_decision_ref"] == previous_decision["record_ref"]
   source = transition["decision_source"]
@@ -289,10 +290,6 @@ def transition_errors(transition, previous, current, previous_decision, facts)
     errors << "switch Finding map duplicates" unless ids.uniq == ids
     required = required_carry_ids(previous, previous_decision)
     errors << "switch lost unresolved Findings" unless (required - ids).empty?
-    inherited = current.dig("finding_continuity", "inherited") || []
-    mapping.each do |item|
-      errors << "switch Finding source/identity lost" unless inherited.any? { |kept| kept["finding_id"] == item["finding_id"] && kept["source_round_ref"] == item["source_round_ref"] }
-    end
   end
   unless facts.is_a?(Hash)
     errors << "switch primary evidence unresolved"
@@ -304,6 +301,25 @@ def transition_errors(transition, previous, current, previous_decision, facts)
   errors << "switch evidence binds wrong record" unless facts["transition_ref"] == transition["record_ref"]
   %w[old_contract_ref new_contract_ref source_round_ref source_decision_ref current_head authorization_scope_refs evidence_applicability_refs].each do |key|
     errors << "switch evidence #{key} mismatch" unless facts[key] == transition[key]
+  end
+  errors
+end
+
+# A continuation Round must additionally bind the persisted switch and carried Findings.
+def transition_errors(transition, previous, current, previous_decision, facts)
+  errors = transition_record_errors(transition, previous, previous_decision, facts)
+  return errors unless transition.is_a?(Hash)
+
+  %w[repository pr base_sha].each { |key| errors << "switch #{key} mismatch" unless transition[key] == current[key] }
+  errors << "switch head mismatch" unless transition["current_head"] == current["current_review_head"]
+  errors << "switch reference mismatch" unless transition["record_ref"] == current["transition_ref"] && nonempty?(transition["record_ref"])
+  errors << "switch new authority mismatch" unless transition["new_contract_ref"] == current.dig("authority_snapshot", "effective_contract_ref")
+  mapping = transition["finding_map"]
+  if mapping.is_a?(Array) && mapping.all? { |item| item.is_a?(Hash) }
+    inherited = current.dig("finding_continuity", "inherited") || []
+    mapping.each do |item|
+      errors << "switch Finding source/identity lost" unless inherited.any? { |kept| kept["finding_id"] == item["finding_id"] && kept["source_round_ref"] == item["source_round_ref"] }
+    end
   end
   errors
 end
@@ -333,7 +349,9 @@ def recover_final_gate(comments, round_ref, current_head, resolved_evidence, aut
     history.concat(records)
     errors.concat(history_errors)
   end
-  history.select! { |item| item["repository"] == round["repository"] && item["pr"] == round["pr"] && item["review_stage"] == "final_review" }
+  history.select! do |item|
+    %w[repository pr review_stage base_sha].all? { |key| item[key] == round[key] }
+  end
   duplicates = history.map { |item| item["record_ref"] }
   errors << "Final history has duplicate record identities" unless duplicates.uniq == duplicates
   other_rounds = history.reject { |item| item["record_ref"] == round["record_ref"] }
@@ -2457,6 +2475,33 @@ def final_comments(round, payload, decisions)
     decisions.map { |item| render_yaml_comment(FINAL_DECISION_MARKER, item) }
 end
 
+# Exercise generated comment bodies through the canonical checks without repairing input.
+def generated_record_result(check, input)
+  comments = input.fetch("comments")
+  case check
+  when "final_gate"
+    recover_final_gate(comments, input.fetch("round_ref"), input.fetch("current_head"), input.fetch("resolved_evidence"), input.fetch("authority_facts"),
+                       previous: input["previous"], previous_decision: input["previous_decision"], lineage: input.fetch("lineage", []), transition_facts: input["transition_facts"])
+  when "transition_record"
+    previous = input.fetch("previous")
+    previous_decision = input.fetch("previous_decision")
+    validate_round_record(previous, "generated transition source Round")
+    marker = record_contract(previous) == FINAL_CONTRACT ? FINAL_ROUND_MARKER : ROUND_RECORD_MARKER
+    recovered_previous, errors = recover_record_by_ref(comments, marker, "hrb-review-round-record", previous["record_ref"])
+    errors << "generated transition source Round mismatch" unless recovered_previous == previous
+    recovered_decision, decision_errors = recover_effective_decision(comments, previous)
+    errors.concat(decision_errors)
+    errors << "generated transition source Decision mismatch" unless recovered_decision == previous_decision
+    errors.concat(resolve_round_payloads(previous, comments))
+    transition, transition_read_errors = recover_record_by_ref(comments, TRANSITION_MARKER, "hrb-contract-transition", input.fetch("transition_ref"))
+    errors.concat(transition_read_errors)
+    errors.concat(transition_record_errors(transition, previous, previous_decision, input.fetch("facts")))
+    [errors.empty?, errors]
+  else
+    fail_contract("unknown generated record check #{check.inspect}")
+  end
+end
+
 comments_v2 = final_comments(final_round, final_payload, [final_decision])
 route, errors = recover_final_gate(comments_v2, final_round["record_ref"], final_round["current_review_head"], final_suite["resolved_evidence"], final_suite["authority_facts"])
 fail_contract("Final v2 recovery failed: #{errors.join('; ')}") unless route == "closeout" && errors.empty?
@@ -2645,6 +2690,46 @@ fail_contract("implicit in-flight switch accepted") unless route == "blocked" &&
 fail_contract("old approval transferred to switched head") unless gate_route_for_head(decision, round2, switched["current_review_head"]) == "blocked"
 route, errors = recover_final_gate(legacy_comments + comments_v2, final_round["record_ref"], final_round["current_review_head"], final_suite["resolved_evidence"], final_suite["authority_facts"])
 fail_contract("first-round reset silently upgraded in-flight v1 work") unless route == "blocked" && errors.any? { |error| error.include?("first-round reset") }
+fail_contract("same-base conflicting history accepted") unless errors.include?("Final history contains conflicting same/newer round")
+
+# A new base starts a separate lineage even when older-base comments remain discoverable.
+new_base_round = deep_copy(final_round)
+new_base_round["base_sha"] = "9" * 40
+new_base_round["authority_snapshot"]["review_policy_ref"] = "fixture://review-policy@#{new_base_round['base_sha']}"
+new_base_authority = deep_copy(final_suite["authority_facts"])
+new_base_authority.merge!("base_sha" => new_base_round["base_sha"], "authority_snapshot" => deep_copy(new_base_round["authority_snapshot"]))
+new_base_comments = legacy_comments + final_comments(new_base_round, final_payload, [final_decision])
+route, errors = recover_final_gate(new_base_comments, new_base_round["record_ref"], new_base_round["current_review_head"], final_suite["resolved_evidence"], new_base_authority)
+fail_contract("older-base history blocked a new-base R1: #{errors.join('; ')}") unless route == "closeout" && errors.empty?
+
+# Base scoping must not hide discovery errors or bypass payload / authority checks.
+[:old_base_unknown_marker, :old_base_unknown_contract, :missing_payload, :unverified_authority].each do |name|
+  comments = deep_copy(new_base_comments)
+  facts = deep_copy(new_base_authority)
+  case name
+  when :old_base_unknown_marker
+    comments << { "body" => "<!-- hrb-review-round-record:v99 -->\n```yaml\nartifact: hrb-review-round-record\n```" }
+  when :old_base_unknown_contract
+    unknown = deep_copy(round1)
+    unknown["contract_version"] = "hrb-unknown"
+    comments << render_yaml_comment(ROUND_RECORD_MARKER, unknown)
+  when :missing_payload
+    comments.reject! { |comment| comment["body"].include?("<!-- #{FINAL_BRIEF_MARKER} -->") }
+  when :unverified_authority
+    facts["effective"] = false
+  end
+  route, errors = recover_final_gate(comments, new_base_round["record_ref"], new_base_round["current_review_head"], final_suite["resolved_evidence"], facts)
+  fail_contract("new-base recovery bypassed #{name}") unless route == "blocked" && !errors.empty?
+end
+
+conflicting = deep_copy(switched)
+conflicting.merge!("round" => 4, "record_ref" => switched["record_ref"].sub("/3@", "/4@"))
+route, errors = recover_final_gate(switched_comments + [render_yaml_comment(FINAL_ROUND_MARKER, conflicting)], switched["record_ref"], switched["current_review_head"], final_suite["resolved_evidence"], switched_authority,
+                                  previous: round2, previous_decision: decision, lineage: [round1, round2], transition_facts: switch_facts)
+fail_contract("same-base newer round bypassed conflict detection") unless route == "blocked" && errors.include?("Final history contains conflicting same/newer round")
+route, errors = recover_final_gate(switched_comments + [render_yaml_comment(ROUND_RECORD_MARKER, round1)], switched["record_ref"], switched["current_review_head"], final_suite["resolved_evidence"], switched_authority,
+                                  previous: round2, previous_decision: decision, lineage: [round1, round2], transition_facts: switch_facts)
+fail_contract("same-base duplicate history bypassed detection") unless route == "blocked" && errors.include?("Final history has duplicate record identities")
 # Keeping an old ID but changing its original owner is also loss of continuity.
 reowned = deep_copy(switched)
 reowned["finding_continuity"]["inherited"] << { "finding_id" => "R1-RF-01", "source_round_ref" => round2["record_ref"], "responsible_owner" => "implementation_owner", "evidence_refs" => ["fixture://old-finding"] }
@@ -2665,6 +2750,69 @@ fail_contract("carried Finding source rewritten to a non-emitting Round") if rou
 end
 require_path(by_id.fetch("C24_FINAL_V2_COMPILATION"), "C24", %w[expected code_review_inherits_eight_dimensions], false)
 require_path(by_id.fetch("C25_STAGE_VERSION_DISPATCH"), "C25", %w[expected unknown_version_route], "blocked")
+
+
+# Public synthetic run outputs, including preserved failing shapes, use the same CI command.
+generated_cases = suite.fetch("generated_record_cases")
+required_generated_ids = %w[CASE25_ORIGINAL CASE25_CORRECTED CASE25_VARIANT_ORIGINAL CASE25_VARIANT_CORRECTED CASE29_ORIGINAL CASE29_CORRECTED]
+fail_contract("generated record cases missing or duplicated") unless generated_cases.is_a?(Array) && generated_cases.map { |item| item["id"] }.sort == required_generated_ids.sort
+generated_by_id = generated_cases.to_h { |item| [item.fetch("id"), item] }
+generated_failures = []
+generated_cases.each do |item|
+  bodies = item.fetch("input").fetch("comments")
+  identities = item.fetch("provenance").fetch("comment_bodies")
+  generated_failures << "#{item['id']}: comment identity count mismatch" unless bodies.length == identities.length
+  bodies.each_with_index do |comment, index|
+    expected_hash = identities[index] && identities[index]["public_body_sha256"]
+    generated_failures << "#{item['id']}: comment #{index} body hash mismatch" unless Digest::SHA256.hexdigest(comment.fetch("body")) == expected_hash
+  end
+  result, errors = generated_record_result(item.fetch("check"), item.fetch("input"))
+  expected = item.fetch("expected")
+  expected_result = item["check"] == "final_gate" ? expected.fetch("route") : expected.fetch("valid")
+  generated_failures << "#{item['id']}: expected #{expected_result.inspect}, got #{result.inspect}" unless result == expected_result
+  diagnostics = expected.fetch("error_includes")
+  diagnostics.each do |diagnostic|
+    generated_failures << "#{item['id']}: missing canonical diagnostic #{diagnostic.inspect}" unless errors.any? { |error| error.include?(diagnostic) }
+  end
+  unless item["id"].end_with?("_ORIGINAL")
+    unexpected = errors.reject { |error| diagnostics.any? { |diagnostic| error.include?(diagnostic) } }
+    generated_failures << "#{item['id']}: unexpected canonical diagnostics" unless unexpected.empty?
+  end
+  puts "Generated record #{item['id']}: #{result.inspect}; #{errors.length} diagnostic(s): #{errors.first(12).join('; ')}"
+end
+fail_contract(generated_failures.join("; ")) unless generated_failures.empty?
+
+# Isolate the reported defects from other errors in the original generated records.
+namespace_input = deep_copy(generated_by_id.fetch("CASE25_CORRECTED").fetch("input"))
+namespace_input["comments"].each do |comment|
+  record = parse_marked_yaml_comment(comment["body"], FINAL_DECISION_MARKER)
+  next unless record.is_a?(Hash)
+
+  record["record_ref"] = record["record_ref"].sub("/decision/", "/review-decisions/")
+  comment["body"] = render_yaml_comment(FINAL_DECISION_MARKER, record)["body"]
+end
+route, errors = generated_record_result("final_gate", namespace_input)
+fail_contract("generated Decision accepted noncanonical namespace") unless route == "blocked" && errors.any? { |error| error.include?("durable hrb://github decision namespace") }
+
+state_input = deep_copy(generated_by_id.fetch("CASE29_CORRECTED").fetch("input"))
+state_input["comments"].each do |comment|
+  record = parse_marked_yaml_comment(comment["body"], TRANSITION_MARKER)
+  next unless record.is_a?(Hash)
+
+  record["current_state"] = { "current_step" => record["current_state"] }
+  comment["body"] = render_yaml_comment(TRANSITION_MARKER, record)["body"]
+end
+valid, errors = generated_record_result("transition_record", state_input)
+fail_contract("generated transition accepted object current_state") unless !valid && errors.include?("switch current state missing")
+
+candidate_input = deep_copy(generated_by_id.fetch("CASE25_CORRECTED").fetch("input"))
+candidate_input["authority_facts"]["effective"] = false
+route, errors = generated_record_result("final_gate", candidate_input)
+fail_contract("generated Final bypassed candidate authority") unless route == "blocked" && errors.include?("Final effective base authority unverified")
+unauthorized_input = deep_copy(generated_by_id.fetch("CASE29_CORRECTED").fetch("input"))
+unauthorized_input["facts"]["owner_authorized"] = false
+valid, errors = generated_record_result("transition_record", unauthorized_input)
+fail_contract("generated transition bypassed Owner authorization") unless !valid && errors.include?("switch owner_authorized not established")
 
 
 policy_text = File.read(policy_path)
