@@ -2576,6 +2576,85 @@ rf01_cases.each do |name, (legacy, expected_route, expected_error)|
   r2_regression_failures << detail unless passed
 end
 
+# R3-RF-02: current-PR locators cannot disappear with damaged repository/PR fields.
+# Synthetic records only. Exercise the real generated-record consumer unchanged.
+r2_regression_failures ||= []
+r3_rf02_error = "Final history has missing, invalid or contradictory repository/pr for current-PR locator"
+r3_rf02_check = lambda do |name, historical, expected_route, expected_error|
+  input = {
+    "comments" => deep_copy(comments_v2) + historical.map { |item| render_yaml_comment(ROUND_RECORD_MARKER, item) },
+    "round_ref" => final_round["record_ref"],
+    "current_head" => final_round["current_review_head"],
+    "resolved_evidence" => deep_copy(final_suite["resolved_evidence"]),
+    "authority_facts" => deep_copy(final_suite["authority_facts"])
+  }
+  route, errors = generated_record_result("final_gate", input)
+  passed = route == expected_route && (expected_error ? errors.any? { |error| error.include?(expected_error) } : errors.empty?)
+  detail = "R3-RF-02 #{name}: expected_route=#{expected_route.inspect} expected_error=#{expected_error.inspect} actual_route=#{route.inspect} actual_errors=#{errors.inspect}"
+  puts detail
+  r2_regression_failures << detail unless passed
+end
+r3_rf02_check.call("valid_no_history", [], "closeout", nil)
+
+# Keep record_ref, both discovery references, stage, base, Findings and payload refs
+# identical. Each case changes exactly one identity field on the legacy fixture.
+{
+  "repository_missing" => ->(item) { item.delete("repository") },
+  "repository_null" => ->(item) { item["repository"] = nil },
+  "pr_missing" => ->(item) { item.delete("pr") },
+  "pr_string" => ->(item) { item["pr"] = round1["pr"].to_s },
+  "repository_contradictory" => ->(item) { item["repository"] = "lu90/example-extra" },
+  "pr_contradictory" => ->(item) { item["pr"] = 1230 }
+}.each do |name, mutate|
+  malformed = deep_copy(round1)
+  mutate.call(malformed)
+  %w[record_ref storage payload_storage].each do |key|
+    fail_contract("R3-RF-02 #{name} lost its current-PR #{key} anchor") unless malformed[key] == round1[key]
+  end
+  r3_rf02_check.call(name, [malformed], "blocked", r3_rf02_error)
+end
+
+# These complete valid records consistently belong elsewhere. PR 1230 also guards
+# against a loose /pull/123 prefix match. Validate them under their real v1 contract.
+r3_rf02_unrelated = []
+[["other_pr", round1["repository"], 1230], ["other_repository", "lu90/example-extra", round1["pr"]]].each do |name, repository, pr|
+  unrelated = deep_copy(round1)
+  old_prefix = "hrb://github/#{round1['repository']}/pull/#{round1['pr']}/"
+  new_prefix = "hrb://github/#{repository}/pull/#{pr}/"
+  unrelated["repository"] = repository
+  unrelated["pr"] = pr
+  unrelated["record_ref"] = unrelated["record_ref"].sub(old_prefix, new_prefix)
+  unrelated["fresh_review"]["raw_findings_ref"] = unrelated["fresh_review"]["raw_findings_ref"].sub(old_prefix, new_prefix)
+  unrelated["brief"]["brief_ref"] = unrelated["brief"]["brief_ref"].sub(old_prefix, new_prefix)
+  %w[storage payload_storage].each do |key|
+    unrelated[key]["discovery_ref"] = "github-pr-comments://#{repository}/pull/#{pr}"
+  end
+  validate_round_record(unrelated, "R3-RF-02 valid #{name} control")
+  r3_rf02_check.call("valid_#{name}", [unrelated], "closeout", nil)
+  r3_rf02_unrelated << unrelated
+end
+
+# Each supported canonical locator independently makes the same identity conflict
+# in-scope; no arbitrary prose, partial PR text, or coerced numeric field is used.
+%w[record_ref storage payload_storage].each do |key|
+  contradictory = deep_copy(r3_rf02_unrelated.first)
+  contradictory[key] = deep_copy(round1[key])
+  r3_rf02_check.call("current_pr_#{key}_only", [contradictory], "blocked", r3_rf02_error)
+end
+
+# Preserve the existing stage/base sequence after the bounded identity check.
+r3_rf02_check.call("valid_same_pr_history", [round1], "blocked", "first-round reset")
+r3_rf02_spec = deep_copy(round1)
+r3_rf02_spec["review_stage"] = "spec_review"
+validate_round_record(r3_rf02_spec, "R3-RF-02 valid separate Spec-stage control")
+r3_rf02_check.call("valid_separate_spec_stage", [r3_rf02_spec], "closeout", nil)
+r3_rf02_missing_stage = deep_copy(round1)
+r3_rf02_missing_stage.delete("review_stage")
+r3_rf02_check.call("missing_stage_still_blocked", [r3_rf02_missing_stage], "blocked", "Final history has missing or invalid review_stage")
+r3_rf02_missing_base = deep_copy(round1)
+r3_rf02_missing_base.delete("base_sha")
+r3_rf02_check.call("missing_base_still_blocked", [r3_rf02_missing_base], "blocked", "Final history has missing or invalid base_sha")
+
 final_negatives = {
   "v2 Spec stage" => ->(round) { round["review_stage"] = "spec_review" },
   "unknown schema" => ->(round) { round["schema_version"] = 99 },
@@ -3062,6 +3141,315 @@ end
 valid, errors = generated_record_result("transition_record", owner_proof_original)
 puts "transition ownership verified original older emitter: expected valid=true; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
 r2_regression_failures << "transition ownership rejected a verified original older emitter" unless valid && errors.empty?
+
+# R3-RF-01: immutable legacy Round 1 -> 2 -> 3 may switch to its proven emitter.
+# Insert immediately before the existing shared "Recovery regressions failed" assertion.
+# This is test-only synthetic evidence. No fixture statement supplies live approval.
+r2_regression_failures ||= []
+rf01_failures = []
+rf01_note = lambda do |name, expected, actual, errors, ok|
+  puts "R3-RF-01 #{name}: expected #{expected}; actual=#{actual.inspect}; diagnostics=#{errors.inspect}"
+  rf01_failures << name unless ok
+end
+rf01_source_snapshot = Marshal.dump(owner_proof_full)
+rf01_immutable = deep_copy(owner_proof_full)
+rf01_transition = nil
+rf01_immutable.fetch("comments").each do |comment|
+  record = parse_marked_yaml_comment(comment.fetch("body"), TRANSITION_MARKER)
+  next unless record.is_a?(Hash)
+
+  record.fetch("finding_map").find { |item| item["finding_id"] == "R1-RF-01" }["source_round_ref"] = round1.fetch("record_ref")
+  rf01_transition = record
+  comment["body"] = render_yaml_comment(TRANSITION_MARKER, record).fetch("body")
+end
+fail_contract("R3-RF-01 transition fixture missing") unless rf01_transition
+rf01_source_comments = lambda do |input|
+  input.fetch("comments").reject { |comment| parse_marked_yaml_comment(comment.fetch("body"), TRANSITION_MARKER).is_a?(Hash) }
+end
+fail_contract("R3-RF-01 fixture rewrote source history") unless rf01_source_comments.call(rf01_immutable) == rf01_source_comments.call(owner_proof_full) && rf01_immutable["previous"] == owner_proof_full["previous"] && rf01_immutable["previous_decision"] == owner_proof_full["previous_decision"]
+fail_contract("R3-RF-01 lost intermediary pointer") unless rf01_immutable.dig("previous", "finding_continuity", "inherited", 0, "source_round_ref") == no_new_fresh["record_ref"]
+[[round1, round1_decision], [no_new_fresh, d2], [r3, d3]].each do |source, source_decision|
+  validate_round_record(source, "R3-RF-01 unchanged legacy source")
+  validate_decision_record(source_decision, source, "R3-RF-01 unchanged legacy Decision")
+  payload_errors = resolve_round_payloads(source, rf01_immutable.fetch("comments"))
+  fail_contract("R3-RF-01 incomplete source payloads: #{payload_errors.join('; ')}") unless payload_errors.empty?
+end
+validate_round_lineage(round1, no_new_fresh, round1_decision, [round1], "R3-RF-01 unchanged first legacy carry")
+validate_round_lineage(no_new_fresh, r3, d2, [round1, no_new_fresh], "R3-RF-01 unchanged second legacy carry")
+rf01_immutable_snapshot = Marshal.dump(rf01_immutable)
+
+# Newly introduced standalone rejection. The source Round 3 still points to Round 2.
+valid, errors = generated_record_result("transition_record", rf01_immutable)
+rf01_note.call("immutable standalone", "valid=true, no diagnostics", valid, errors, valid && errors.empty?)
+
+# Create only a NEW Final Round 4 at the transition head. Historical bytes stay fixed.
+# Rehead synthetic current-head evidence consistently; never relabel real executions.
+rf01_rehead = lambda do |value, old_head, new_head|
+  case value
+  when Hash then value.to_h { |key, item| [rf01_rehead.call(key, old_head, new_head), rf01_rehead.call(item, old_head, new_head)] }
+  when Array then value.map { |item| rf01_rehead.call(item, old_head, new_head) }
+  when String then value.gsub(old_head, new_head)
+  else value
+  end
+end
+rf01_final_suite = rf01_rehead.call(final_suite, final_round.fetch("current_review_head"), rf01_transition.fetch("current_head"))
+rf01_final_round = rf01_final_suite.fetch("round")
+rf01_final_round.merge!("round" => 4, "record_ref" => rf01_final_round.fetch("record_ref").sub("/1@", "/4@"),
+  "previous_review_head" => r3.fetch("current_review_head"), "prior_round_ref" => r3.fetch("record_ref"), "transition_ref" => rf01_transition.fetch("record_ref"))
+rf01_final_round["brief"]["brief_ref"] = rf01_final_round.dig("brief", "brief_ref").sub("/1/", "/4/")
+rf01_final_round["finding_continuity"] = {
+  "inherited" => [{"finding_id" => "R1-RF-01", "source_round_ref" => round1.fetch("record_ref"),
+    "responsible_owner" => "implementation_owner", "evidence_refs" => ["fixture://rf01-unresolved"]}],
+  "decision_scope_finding_ids" => ["R1-RF-01"]
+}
+rf01_final_payload = rf01_final_suite.fetch("brief_payload")
+rf01_final_payload.merge!("record_ref" => rf01_final_round.dig("brief", "brief_ref"), "review_round_ref" => rf01_final_round.fetch("record_ref"))
+rf01_final_payload["content"]["decision_scope_finding_ids"] = ["R1-RF-01"]
+rf01_final_payload["content"]["markdown"] = "Fixture only: Final Round 4 retains unresolved R1-RF-01 from Round 1 after an authorized legacy switch. The immutable Round 3 still points to its Round 2 intermediary. Owner requests remediation; this is not approval. Dedicated Final specialist coverage is removed."
+rf01_final_decision = rf01_rehead.call(final_decision, final_round.fetch("current_review_head"), rf01_transition.fetch("current_head"))
+rf01_final_decision.merge!("review_round_ref" => rf01_final_round.fetch("record_ref"),
+  "record_ref" => rf01_final_decision.fetch("record_ref").sub("round-1/", "round-4/"),
+  "overall_decision" => "request_changes", "required_finding_ids" => ["R1-RF-01"])
+rf01_final_decision["decision_sources"][0]["captured_statement"] = "Fixture only: keep the Spec and remediate inherited R1-RF-01. This is simulated input, not live authority."
+rf01_final_decision["findings"] = [{"finding_id" => "R1-RF-01", "disposition" => "remediate",
+  "owner_decision" => "Fixture only: remediate the unresolved original Finding.", "remediation_constraints" => [], "decision_source_ids" => ["fixture-owner-1"]}]
+rf01_final_suite["authority_facts"]["prior_records_verified"] = true
+validate_round_record(rf01_final_round, "R3-RF-01 new Final consumer")
+validate_decision_record(rf01_final_decision, rf01_final_round, "R3-RF-01 new Final Decision")
+rf01_final_input = {
+  "comments" => deep_copy(rf01_immutable.fetch("comments")) + final_comments(rf01_final_round, rf01_final_payload, [rf01_final_decision]),
+  "round_ref" => rf01_final_round.fetch("record_ref"), "current_head" => rf01_final_round.fetch("current_review_head"),
+  "resolved_evidence" => rf01_final_suite.fetch("resolved_evidence"), "authority_facts" => rf01_final_suite.fetch("authority_facts"),
+  "previous" => deep_copy(r3), "previous_decision" => deep_copy(d3), "lineage" => deep_copy([round1, no_new_fresh, r3]),
+  "transition_facts" => deep_copy(rf01_immutable.fetch("facts"))
+}
+rf01_final_snapshot = Marshal.dump(rf01_final_input)
+route, errors = generated_record_result("final_gate", rf01_final_input)
+rf01_note.call("immutable later Final", "implementation_remediation, no diagnostics", route, errors, route == "implementation_remediation" && errors.empty?)
+
+# Both consumer paths must still reject missing/foreign/unproven/non-emitting origins.
+# Diagnostic assertions isolate the actual failed proof rather than an incidental block.
+rf01_negatives = {
+  "missing item source" => ["source_round_ref missing", lambda do |input|
+    input["comments"].each do |comment|
+      record = parse_marked_yaml_comment(comment["body"], TRANSITION_MARKER)
+      next unless record.is_a?(Hash)
+      record["finding_map"][0].delete("source_round_ref")
+      comment["body"] = render_yaml_comment(TRANSITION_MARKER, record)["body"]
+    end
+  end],
+  "foreign item source" => ["original source mismatch", lambda do |input|
+    input["comments"].each do |comment|
+      record = parse_marked_yaml_comment(comment["body"], TRANSITION_MARKER)
+      next unless record.is_a?(Hash)
+      record["finding_map"][0]["source_round_ref"] = "hrb://github/foreign/repository/pull/999/review-round/1@#{'f' * 40}"
+      comment["body"] = render_yaml_comment(TRANSITION_MARKER, record)["body"]
+    end
+  end],
+  "emitter record absent" => ["original emission unproven", lambda do |input|
+    input["comments"].reject! do |comment|
+      record = parse_marked_yaml_comment(comment["body"], ROUND_RECORD_MARKER)
+      record.is_a?(Hash) && record["record_ref"] == round1["record_ref"]
+    end
+  end],
+  "emitter payload absent" => [round1.dig("fresh_review", "raw_findings_ref"), lambda do |input|
+    input["comments"].reject! do |comment|
+      payload = parse_marked_yaml_comment(comment["body"], RAW_FINDINGS_MARKER)
+      payload.is_a?(Hash) && payload["record_ref"] == round1.dig("fresh_review", "raw_findings_ref")
+    end
+  end],
+  "intermediary record absent" => ["original source mismatch", lambda do |input|
+    input["comments"].reject! do |comment|
+      record = parse_marked_yaml_comment(comment["body"], ROUND_RECORD_MARKER)
+      record.is_a?(Hash) && record["record_ref"] == no_new_fresh["record_ref"]
+    end
+    input["lineage"].reject! { |record| record["record_ref"] == no_new_fresh["record_ref"] } if input["lineage"]
+  end],
+  "non-emitting intermediary" => ["source Round did not emit Finding", lambda do |input|
+    input["comments"].each do |comment|
+      record = parse_marked_yaml_comment(comment["body"], TRANSITION_MARKER)
+      next unless record.is_a?(Hash)
+      record["finding_map"][0]["source_round_ref"] = no_new_fresh["record_ref"]
+      comment["body"] = render_yaml_comment(TRANSITION_MARKER, record)["body"]
+    end
+  end]
+}
+rf01_negatives.each do |name, (diagnostic, mutate)|
+  [["transition_record", rf01_immutable], ["final_gate", rf01_final_input]].each do |check, original|
+    input = deep_copy(original)
+    mutate.call(input)
+    result, errors = generated_record_result(check, input)
+    blocked = check == "transition_record" ? result == false : result == "blocked"
+    # Before the fix, later Final does not run the standalone emitter proof. These
+    # exact diagnostics intentionally force GREEN to retain that proof in both paths.
+    ok = blocked && errors.any? { |error| error.include?(diagnostic) }
+    rf01_note.call("#{name} / #{check}", "blocked with #{diagnostic.inspect}", result, errors, ok)
+  end
+end
+
+# Switching does not transfer old approval, and unverified authority cannot open a gate.
+rf01_unapproved = deep_copy(rf01_final_input)
+rf01_unapproved["transition_facts"]["owner_authorized"] = false
+route, errors = generated_record_result("final_gate", rf01_unapproved)
+rf01_note.call("Owner authorization retained", "blocked", route, errors, route == "blocked" && errors.include?("switch owner_authorized not established"))
+rf01_failures << "old Decision approved new head" unless gate_route_for_head(d3, r3, rf01_final_round["current_review_head"]) == "blocked"
+
+# Isolate v2->v2 pointer equality: another schema-valid emitter is not permission
+# to re-own an already normalized ID. This exercises the lineage helper only.
+rf01_next = rf01_rehead.call(rf01_final_round, rf01_final_round["current_review_head"], "6" * 40)
+rf01_next.merge!("round" => 5, "record_ref" => rf01_next["record_ref"].sub("/4@", "/5@"),
+  "previous_review_head" => rf01_final_round["current_review_head"], "prior_round_ref" => rf01_final_round["record_ref"])
+rf01_next["brief"]["brief_ref"] = rf01_next.dig("brief", "brief_ref").sub("/4/", "/5/")
+rf01_next.delete("transition_ref")
+validate_round_record(rf01_next, "R3-RF-01 v2 continuation")
+rf01_v2_lineage = deep_copy([round1, no_new_fresh, r3, rf01_final_round])
+errors = round_lineage_errors(rf01_final_round, rf01_next, rf01_final_decision, rf01_v2_lineage)
+rf01_note.call("v2 retained owner", "no diagnostics", errors.empty?, errors, errors.empty?)
+rf01_other_origin = rf01_rehead.call(round1, round1["current_review_head"], "a" * 40)
+validate_round_record(rf01_other_origin, "R3-RF-01 alternative emitter fixture")
+rf01_next["finding_continuity"]["inherited"][0]["source_round_ref"] = rf01_other_origin["record_ref"]
+errors = round_lineage_errors(rf01_final_round, rf01_next, rf01_final_decision, rf01_v2_lineage + [rf01_other_origin])
+rf01_note.call("v2 owner drift rejected", "only original-source-changed diagnostic", false, errors, errors == ["Final inherited Finding original source changed"])
+
+rf01_failures << "original source fixture mutated" unless Marshal.dump(owner_proof_full) == rf01_source_snapshot
+rf01_failures << "standalone input mutated" unless Marshal.dump(rf01_immutable) == rf01_immutable_snapshot
+rf01_failures << "later Final input mutated" unless Marshal.dump(rf01_final_input) == rf01_final_snapshot
+r2_regression_failures.concat(rf01_failures.map { |name| "R3-RF-01 #{name}" })
+
+# Preparation only; Ruby syntax and behavior UNEXECUTED.
+# Insert after the proposed RF01 snippet and before Recovery regressions failed.
+# RF02's original snippet must already have defined r3_rf02_check/r3_rf02_error.
+# Synthetic input copies only. Never prevalidate or repair the damaged cases.
+rf03_audit_check = lambda do |name, original, check, diagnostic, mutate|
+  input = deep_copy(original)
+  before = Marshal.dump(original)
+  mutate.call(input)
+  result, errors = generated_record_result(check, input)
+  blocked = check == "transition_record" ? result == false : result == "blocked"
+  passed = blocked && errors.any? { |error| error.include?(diagnostic) }
+  detail = "R3 proposal boundary #{name}/#{check}: expected blocked with #{diagnostic.inspect}; actual=#{result.inspect}; errors=#{errors.inspect}"
+  puts detail
+  r2_regression_failures << detail unless passed
+  fail_contract("R3 proposal boundary mutated original #{name}") unless Marshal.dump(original) == before
+end
+rf03_both = lambda do |name, diagnostic, mutate|
+  [["transition_record", rf01_immutable], ["final_gate", rf01_final_input]].each do |check, original|
+    rf03_audit_check.call(name, original, check, diagnostic, mutate)
+  end
+end
+
+# Every payload class on the traversed Round 2 is required, not only emitter R1.
+[
+  [RAW_FINDINGS_MARKER, no_new_fresh.dig("fresh_review", "raw_findings_ref")],
+  [HUMAN_REVIEW_BRIEF_MARKER, no_new_fresh.dig("brief", "brief_ref")],
+  [REMEDIATION_EVIDENCE_MARKER, no_new_fresh.dig("remediation_verification", "results", 0, "evidence_ref")]
+].each do |marker, ref|
+  %w[absent duplicate wrong_head].each do |kind|
+    mutate = lambda do |input|
+      selected = input["comments"].select do |comment|
+        payload = parse_marked_yaml_comment(comment["body"], marker)
+        payload.is_a?(Hash) && payload["record_ref"] == ref
+      end
+      fail_contract("R3 proposal boundary fixture did not select one payload") unless selected.length == 1
+      if kind == "absent"
+        input["comments"].delete(selected.first)
+      elsif kind == "duplicate"
+        input["comments"] << deep_copy(selected.first)
+      else
+        payload = parse_marked_yaml_comment(selected.first["body"], marker)
+        payload["review_head"] = "9" * 40
+        selected.first["body"] = render_yaml_comment(marker, payload)["body"]
+      end
+    end
+    rf03_both.call("intermediary #{marker} #{kind}", ref, mutate)
+  end
+end
+
+# Supplied lineage must not substitute for persisted intermediary proof.
+rf03_audit_check.call("persisted intermediary absent, supplied copy retained", rf01_final_input, "final_gate",
+  "Final source lineage not recovered identically", lambda do |input|
+    input["comments"].reject! do |comment|
+      record = parse_marked_yaml_comment(comment["body"], ROUND_RECORD_MARKER)
+      record.is_a?(Hash) && record["record_ref"] == no_new_fresh["record_ref"]
+    end
+  end)
+rf03_duplicate_intermediary = lambda do |input|
+  selected = input["comments"].find do |comment|
+    record = parse_marked_yaml_comment(comment["body"], ROUND_RECORD_MARKER)
+    record.is_a?(Hash) && record["record_ref"] == no_new_fresh["record_ref"]
+  end
+  fail_contract("R3 proposal boundary intermediary absent from positive fixture") unless selected
+  input["comments"] << deep_copy(selected)
+end
+rf03_audit_check.call("duplicate persisted intermediary", rf01_immutable, "transition_record",
+  "original source mismatch", rf03_duplicate_intermediary)
+rf03_audit_check.call("duplicate persisted intermediary", rf01_final_input, "final_gate",
+  "Final history has duplicate record identities", rf03_duplicate_intermediary)
+
+# These malformed metadata inputs are rejected by the resolver's existing identity,
+# type and monotonicity guards before the legacy fail_contract shape validator.
+rf03_mutate_intermediary = lambda do |input, key, value|
+  input["comments"].each do |comment|
+    record = parse_marked_yaml_comment(comment["body"], ROUND_RECORD_MARKER)
+    next unless record.is_a?(Hash) && record["record_ref"] == no_new_fresh["record_ref"]
+    record[key] = deep_copy(value)
+    comment["body"] = render_yaml_comment(ROUND_RECORD_MARKER, record)["body"]
+  end
+  Array(input["lineage"]).each do |record|
+    record[key] = deep_copy(value) if record["record_ref"] == no_new_fresh["record_ref"]
+  end
+end
+{
+  "repository" => "foreign/repository",
+  "pr" => 999,
+  "base_sha" => "f" * 40,
+  "review_stage" => "spec_review"
+}.each do |key, value|
+  rf03_both.call("intermediary foreign #{key}", "original source mismatch",
+    ->(input) { rf03_mutate_intermediary.call(input, key, value) })
+end
+{ "null" => nil, "string" => "2", "boolean" => true, "float" => 2.0,
+  "array" => [2], "mapping" => {"number" => 2}, "nondecreasing" => 3 }.each do |kind, value|
+  rf03_both.call("intermediary round #{kind}", "original source mismatch",
+    ->(input) { rf03_mutate_intermediary.call(input, "round", value) })
+end
+
+# Wrong scalar/container classes for the transition's selected source pointer.
+{ "null" => nil, "integer" => 1, "boolean" => false,
+  "array" => [round1["record_ref"]], "mapping" => {"ref" => round1["record_ref"]} }.each do |kind, value|
+  rf03_both.call("mapped source #{kind}", "source_round_ref missing", lambda do |input|
+    input["comments"].each do |comment|
+      record = parse_marked_yaml_comment(comment["body"], TRANSITION_MARKER)
+      next unless record.is_a?(Hash)
+      record["finding_map"][0]["source_round_ref"] = deep_copy(value)
+      comment["body"] = render_yaml_comment(TRANSITION_MARKER, record)["body"]
+    end
+  end)
+end
+
+# RF02: finish finite malformed identity classes through the same real consumer.
+{
+  "repository_empty" => ["repository", ""],
+  "repository_whitespace" => ["repository", "  "],
+  "repository_integer" => ["repository", 123],
+  "repository_boolean" => ["repository", true],
+  "repository_array" => ["repository", [round1["repository"]]],
+  "repository_mapping" => ["repository", {"name" => round1["repository"]}],
+  "pr_null" => ["pr", nil],
+  "pr_boolean" => ["pr", true],
+  "pr_zero" => ["pr", 0],
+  "pr_negative" => ["pr", -1],
+  "pr_float" => ["pr", round1["pr"].to_f],
+  "pr_array" => ["pr", [round1["pr"]]],
+  "pr_mapping" => ["pr", {"number" => round1["pr"]}]
+}.each do |name, (key, value)|
+  malformed = deep_copy(round1)
+  malformed[key] = value
+  %w[record_ref storage payload_storage].each do |anchor|
+    fail_contract("R3 identity boundary lost locator") unless malformed[anchor] == round1[anchor]
+  end
+  r3_rf02_check.call(name, [malformed], "blocked", r3_rf02_error)
+end
 
 fail_contract("Recovery regressions failed: #{r2_regression_failures.join("; ")}") unless r2_regression_failures.empty?
 
