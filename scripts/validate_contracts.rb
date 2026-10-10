@@ -350,8 +350,10 @@ def recover_final_gate(comments, round_ref, current_head, resolved_evidence, aut
     errors.concat(history_errors)
   end
   history.select! do |item|
-    %w[repository pr review_stage base_sha].all? { |key| item[key] == round[key] }
+    %w[repository pr review_stage].all? { |key| item[key] == round[key] }
   end
+  errors << "Final history has missing or invalid base_sha" if history.any? { |item| !sha?(item["base_sha"]) }
+  history.select! { |item| item["base_sha"] == round["base_sha"] }
   duplicates = history.map { |item| item["record_ref"] }
   errors << "Final history has duplicate record identities" unless duplicates.uniq == duplicates
   other_rounds = history.reject { |item| item["record_ref"] == round["record_ref"] }
@@ -2720,6 +2722,21 @@ fail_contract("older-base history blocked a new-base R1: #{errors.join('; ')}") 
   end
   route, errors = recover_final_gate(comments, new_base_round["record_ref"], new_base_round["current_review_head"], final_suite["resolved_evidence"], facts)
   fail_contract("new-base recovery bypassed #{name}") unless route == "blocked" && !errors.empty?
+end
+
+# Malformed base identities in this PR/stage cannot disappear as another lineage.
+[[ROUND_RECORD_MARKER, round1], [FINAL_ROUND_MARKER, switched]].each do |marker, source|
+  [:missing, nil, "not-a-sha", "g" * 40, 1].each do |base|
+    malformed = deep_copy(source)
+    if base == :missing
+      malformed.delete("base_sha")
+    else
+      malformed["base_sha"] = base
+    end
+    comments = new_base_comments + [render_yaml_comment(marker, malformed)]
+    route, errors = recover_final_gate(comments, new_base_round["record_ref"], new_base_round["current_review_head"], final_suite["resolved_evidence"], new_base_authority)
+    fail_contract("#{marker} history accepted invalid base #{base.inspect}") unless route == "blocked" && errors.include?("Final history has missing or invalid base_sha")
+  end
 end
 
 conflicting = deep_copy(switched)
