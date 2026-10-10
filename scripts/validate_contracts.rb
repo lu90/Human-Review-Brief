@@ -290,6 +290,19 @@ def transition_record_errors(transition, previous, previous_decision, facts)
     errors << "switch Finding map duplicates" unless ids.uniq == ids
     required = required_carry_ids(previous, previous_decision)
     errors << "switch lost unresolved Findings" unless (required - ids).empty?
+    # The validated source Round already records original ownership for inherited IDs.
+    emitted_ids = record_contract(previous) == FINAL_CONTRACT ? previous.fetch("findings", []).map { |item| item["finding_id"] } : previous.dig("fresh_review", "finding_ids")
+    prior_inherited = previous.dig("finding_continuity", "inherited") || []
+    mapping.each do |item|
+      id = item["finding_id"]
+      inherited = prior_inherited.find { |candidate| candidate["finding_id"] == id }
+      expected_source = Array(emitted_ids).include?(id) ? previous["record_ref"] : inherited && inherited["source_round_ref"]
+      if !nonempty?(item["source_round_ref"])
+        errors << "switch Finding #{id} source_round_ref missing"
+      elsif !nonempty?(expected_source) || item["source_round_ref"] != expected_source
+        errors << "switch Finding #{id} original source mismatch"
+      end
+    end
   end
   unless facts.is_a?(Hash)
     errors << "switch primary evidence unresolved"
@@ -350,8 +363,10 @@ def recover_final_gate(comments, round_ref, current_head, resolved_evidence, aut
     errors.concat(history_errors)
   end
   history.select! do |item|
-    %w[repository pr review_stage].all? { |key| item[key] == round[key] }
+    %w[repository pr].all? { |key| item[key] == round[key] }
   end
+  errors << "Final history has missing or invalid review_stage" if history.any? { |item| !VALID_REVIEW_STAGE.include?(item["review_stage"]) }
+  history.select! { |item| item["review_stage"] == round["review_stage"] }
   errors << "Final history has missing or invalid base_sha" if history.any? { |item| !sha?(item["base_sha"]) }
   history.select! { |item| item["base_sha"] == round["base_sha"] }
   duplicates = history.map { |item| item["record_ref"] }
