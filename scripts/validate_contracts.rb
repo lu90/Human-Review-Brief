@@ -2509,6 +2509,33 @@ route, errors = recover_final_gate(comments_v2, final_round["record_ref"], final
 fail_contract("Final v2 recovery failed: #{errors.join('; ')}") unless route == "closeout" && errors.empty?
 fail_contract("Final v2 accidentally demands specialist evidence") if final_round.keys.any? { |key| %w[fresh_review remediation_verification coverage_manifest].include?(key) }
 
+# Damaged legacy stage evidence cannot become absent Final history.
+r2_regression_failures ||= []
+legacy_spec_round = deep_copy(round1)
+legacy_spec_round["review_stage"] = "spec_review"
+validate_round_record(legacy_spec_round, "legacy separate Spec stage control")
+rf01_cases = {
+  "legacy_stage_final" => [round1, "blocked", "first-round reset"],
+  "legacy_stage_spec" => [legacy_spec_round, "closeout", nil]
+}
+{ "legacy_stage_missing" => :missing, "legacy_stage_null" => nil, "legacy_stage_unknown" => "unknown" }.each do |name, stage|
+  malformed = deep_copy(round1)
+  if stage == :missing
+    malformed.delete("review_stage")
+  else
+    malformed["review_stage"] = stage
+  end
+  rf01_cases[name] = [malformed, "blocked", "Final history has missing or invalid review_stage"]
+end
+rf01_cases.each do |name, (legacy, expected_route, expected_error)|
+  comments = comments_v2 + [render_yaml_comment(ROUND_RECORD_MARKER, legacy)]
+  route, errors = recover_final_gate(comments, final_round["record_ref"], final_round["current_review_head"], final_suite["resolved_evidence"], final_suite["authority_facts"])
+  passed = route == expected_route && (expected_error ? errors.any? { |error| error.include?(expected_error) } : errors.empty?)
+  detail = "#{name}: expected_route=#{expected_route.inspect} expected_error=#{expected_error.inspect} actual_route=#{route.inspect} actual_errors=#{errors.inspect}"
+  puts detail
+  r2_regression_failures << detail unless passed
+end
+
 final_negatives = {
   "v2 Spec stage" => ->(round) { round["review_stage"] = "spec_review" },
   "unknown schema" => ->(round) { round["schema_version"] = 99 },
@@ -2831,6 +2858,76 @@ unauthorized_input["facts"]["owner_authorized"] = false
 valid, errors = generated_record_result("transition_record", unauthorized_input)
 fail_contract("generated transition bypassed Owner authorization") unless !valid && errors.include?("switch owner_authorized not established")
 
+
+# Persisted transition ownership is checked before a new v2 Round exists.
+# Fixture records and Owner statements below are synthetic; they provide no live authority.
+# Insert after the existing generated transition authorization assertion, before policy_text.
+# The integrator raises once after all R2 regression groups have added their failures.
+r2_regression_failures ||= []
+rf02_original = generated_by_id.fetch("CASE29_CORRECTED").fetch("input")
+valid, errors = generated_record_result("transition_record", deep_copy(rf02_original))
+puts "transition_ownership unchanged source: expected valid=true; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+r2_regression_failures << "transition_ownership valid standalone transition rejected" unless valid && errors.empty?
+
+{
+  "missing_item_source" => ->(item) { item.delete("source_round_ref") },
+  "foreign_item_source" => ->(item) { item["source_round_ref"] = "hrb://github/foreign/repository/pull/999/review-round/1@#{'f' * 40}" }
+}.each do |name, mutate|
+  input = deep_copy(rf02_original)
+  input.fetch("comments").each do |comment|
+    record = parse_marked_yaml_comment(comment.fetch("body"), TRANSITION_MARKER)
+    next unless record.is_a?(Hash)
+
+    mutate.call(record.fetch("finding_map").first)
+    comment["body"] = render_yaml_comment(TRANSITION_MARKER, record).fetch("body")
+  end
+  expected_error = name == "missing_item_source" ? "switch Finding R1-RF-01 source_round_ref missing" : "switch Finding R1-RF-01 original source mismatch"
+  valid, errors = generated_record_result("transition_record", input)
+  puts "transition_ownership #{name}: expected valid=false and #{expected_error.inspect}; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+  r2_regression_failures << "transition_ownership #{name}: expected standalone rejection with #{expected_error}" unless !valid && errors.include?(expected_error)
+end
+
+# A Round 2 switch may carry an unresolved Finding originally emitted in Round 1.
+# Reuse canonical v1 source records and payloads; do not create a continuation Round.
+rf02_older_decision = deep_copy(decision)
+rf02_older_decision.fetch("findings").find { |item| item["finding_id"] == "R1-RF-01" }.merge!(
+  "disposition" => "remediate", "owner_decision" => "Fixture only: retain this original Finding for more remediation."
+)
+rf02_older_decision["decision_sources"][0]["captured_statement"] = "Fixture only: remediate R1-RF-01, R2-RF-01 and R2-RF-02 under the unchanged Spec."
+rf02_older_transition = deep_copy(transition)
+rf02_older_transition["finding_map"] << { "finding_id" => "R1-RF-01", "source_round_ref" => round1.fetch("record_ref") }
+rf02_older_transition["decision_source"]["captured_statement"] = "Fixture only: authorize this contract switch while retaining all three remediation-required IDs and their original source Rounds."
+rf02_older_comments = deep_copy(legacy_comments)
+rf02_older_comments.each do |comment|
+  record = parse_marked_yaml_comment(comment.fetch("body"), DECISION_RECORD_MARKER)
+  next unless record.is_a?(Hash) && record["record_ref"] == decision["record_ref"]
+
+  comment["body"] = render_yaml_comment(DECISION_RECORD_MARKER, rf02_older_decision).fetch("body")
+end
+rf02_older_comments << render_yaml_comment(TRANSITION_MARKER, rf02_older_transition)
+rf02_older_input = {
+  "comments" => rf02_older_comments, "transition_ref" => rf02_older_transition.fetch("record_ref"),
+  "previous" => deep_copy(round2), "previous_decision" => rf02_older_decision, "facts" => deep_copy(switch_facts)
+}
+valid, errors = generated_record_result("transition_record", rf02_older_input)
+puts "transition_ownership inherited original Round 1 source: expected valid=true; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+r2_regression_failures << "transition_ownership legitimate older original source was rejected" unless valid && errors.empty?
+
+# Same repository/PR/base is insufficient: Round 2 inherited R1-RF-01 but did not emit it.
+rf02_reowned_input = deep_copy(rf02_older_input)
+rf02_reowned_input.fetch("comments").each do |comment|
+  record = parse_marked_yaml_comment(comment.fetch("body"), TRANSITION_MARKER)
+  next unless record.is_a?(Hash)
+
+  record.fetch("finding_map").find { |item| item["finding_id"] == "R1-RF-01" }["source_round_ref"] = round2.fetch("record_ref")
+  comment["body"] = render_yaml_comment(TRANSITION_MARKER, record).fetch("body")
+end
+valid, errors = generated_record_result("transition_record", rf02_reowned_input)
+rf02_expected = "switch Finding R1-RF-01 original source mismatch"
+puts "transition_ownership inherited source reowned to immediate prior Round: expected valid=false and #{rf02_expected.inspect}; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+r2_regression_failures << "transition_ownership inherited Finding was reowned to non-emitting prior Round" unless !valid && errors.include?(rf02_expected)
+
+fail_contract("Recovery regressions failed: #{r2_regression_failures.join("; ")}") unless r2_regression_failures.empty?
 
 policy_text = File.read(policy_path)
 fail_contract("REVIEW_POLICY.md missing Active-policy rule") unless policy_text.include?("## Active-policy rule")
