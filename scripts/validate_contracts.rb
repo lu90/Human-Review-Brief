@@ -2942,6 +2942,102 @@ rf02_expected = "switch Finding R1-RF-01 original source mismatch"
 puts "transition_ownership inherited source reowned to immediate prior Round: expected valid=false and #{rf02_expected.inspect}; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
 r2_regression_failures << "transition_ownership inherited Finding was reowned to non-emitting prior Round" unless !valid && errors.include?(rf02_expected)
 
+# Prepared synthetic transition ownership regression. Insert before the shared recovery-regression failure assertion.
+# All Owner statements below are synthetic fixtures, not authority.
+r3 = deep_copy(no_new_fresh)
+h3 = '4' * 40
+r3['round'] = 3
+r3['record_ref'] = no_new_fresh['record_ref'].sub('/2@', '/3@').sub('3' * 40, h3)
+r3['previous_review_head'] = no_new_fresh['current_review_head']
+r3['current_review_head'] = h3
+r3['fresh_review']['raw_findings_ref'] = r3['record_ref'].sub('/3@', '/3/raw-findings@')
+r3['brief']['brief_ref'] = r3['record_ref'].sub('/3@', '/3/human-review-brief@')
+r3['remediation_verification']['prior_round_ref'] = no_new_fresh['record_ref']
+r3['remediation_verification']['results'][0]['evidence_ref'] = r3['record_ref'].sub('/3@', '/3/remediation/R1-RF-01@')
+r3['finding_continuity']['inherited'][0]['source_round_ref'] = no_new_fresh['record_ref']
+d2 = deep_copy(round1_decision)
+d2['record_ref'] = d2['record_ref'].sub('round-1/', 'round-2/').sub('2' * 40, '3' * 40)
+d2['review_round_ref'] = no_new_fresh['record_ref']
+d2['review_head'] = no_new_fresh['current_review_head']
+d2['decision_sources'][0]['captured_statement'] = 'Fixture only: continue remediation of R1-RF-01.'
+d3 = deep_copy(d2)
+d3['record_ref'] = d3['record_ref'].sub('round-2/', 'round-3/').sub('3' * 40, h3)
+d3['review_round_ref'] = r3['record_ref']
+d3['review_head'] = h3
+validate_round_record(r3, 'multi-hop v1 source')
+validate_decision_record(d2, no_new_fresh, 'multi-hop prior Decision')
+validate_decision_record(d3, r3, 'multi-hop source Decision')
+validate_round_lineage(round1, no_new_fresh, round1_decision, [round1], 'first legacy carry')
+validate_round_lineage(no_new_fresh, r3, d2, [round1, no_new_fresh], 'second legacy carry via non-emitter')
+t = deep_copy(transition)
+t['record_ref'] = t['record_ref'].sub('4' * 40, '5' * 40)
+t['current_head'] = '5' * 40
+t['source_round_ref'] = r3['record_ref']
+t['source_decision_ref'] = d3['record_ref']
+t['finding_map'] = [{'finding_id' => 'R1-RF-01', 'source_round_ref' => no_new_fresh['record_ref']}]
+t['decision_source']['captured_statement'] = 'Fixture only: authorize switching this legacy Round 3 while retaining R1-RF-01.'
+f = deep_copy(switch_facts)
+f['transition_ref'] = t['record_ref']
+%w[old_contract_ref new_contract_ref source_round_ref source_decision_ref current_head authorization_scope_refs evidence_applicability_refs].each { |key| f[key] = deep_copy(t[key]) }
+comments = [render_yaml_comment(ROUND_RECORD_MARKER, r3), render_yaml_comment(DECISION_RECORD_MARKER, d3), render_yaml_comment(TRANSITION_MARKER, t)]
+[
+  [RAW_FINDINGS_MARKER, 'raw_findings', r3.dig('fresh_review', 'raw_findings_ref'), {'findings' => []}],
+  [HUMAN_REVIEW_BRIEF_MARKER, 'human_review_brief', r3.dig('brief', 'brief_ref'), {'markdown' => 'Fixture only: R1-RF-01 remains unresolved.'}],
+  [REMEDIATION_EVIDENCE_MARKER, 'remediation_evidence', r3.dig('remediation_verification', 'results', 0, 'evidence_ref'), {'prior_finding_id' => 'R1-RF-01', 'status' => 'unresolved', 'evidence' => ['fixture://unresolved']}]
+].each do |marker, kind, ref, content|
+  comments << render_yaml_comment(marker, {'schema_version' => 1, 'artifact' => 'hrb-review-payload', 'payload_type' => kind, 'record_ref' => ref, 'repository' => r3['repository'], 'pr' => r3['pr'], 'review_round_ref' => r3['record_ref'], 'review_head' => h3, 'content' => content})
+end
+
+r2_regression_failures ||= []
+owner_proof_input = {"comments" => comments, "transition_ref" => t["record_ref"], "previous" => r3, "previous_decision" => d3, "facts" => f}
+valid, errors = generated_record_result("transition_record", owner_proof_input)
+expected = "switch Finding R1-RF-01 original emission unproven"
+puts "transition ownership absent historical source: expected valid=false and #{expected.inspect}; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+r2_regression_failures << "transition ownership accepted unproven original emission" unless !valid && errors.include?(expected)
+
+# Add the actual unchanged Round 1 emitter and the v1-valid Round 2 intermediary.
+# No v2 continuation Round is created and no legacy ownership semantics are changed.
+owner_proof_full = deep_copy(owner_proof_input)
+owner_proof_full["comments"] += [render_yaml_comment(ROUND_RECORD_MARKER, round1), render_yaml_comment(DECISION_RECORD_MARKER, round1_decision),
+  render_yaml_comment(ROUND_RECORD_MARKER, no_new_fresh), render_yaml_comment(DECISION_RECORD_MARKER, d2)]
+payload_comments.each do |comment|
+  payload = [RAW_FINDINGS_MARKER, HUMAN_REVIEW_BRIEF_MARKER, REMEDIATION_EVIDENCE_MARKER].filter_map { |marker| parse_marked_yaml_comment(comment["body"], marker) }.find { |item| item.is_a?(Hash) }
+  owner_proof_full["comments"] << deep_copy(comment) if payload && payload["review_round_ref"] == round1["record_ref"]
+end
+[
+  [RAW_FINDINGS_MARKER, "raw_findings", no_new_fresh.dig("fresh_review", "raw_findings_ref"), {"findings" => []}],
+  [HUMAN_REVIEW_BRIEF_MARKER, "human_review_brief", no_new_fresh.dig("brief", "brief_ref"), {"markdown" => "Fixture only: R1-RF-01 requires further remediation."}],
+  [REMEDIATION_EVIDENCE_MARKER, "remediation_evidence", no_new_fresh.dig("remediation_verification", "results", 0, "evidence_ref"), {"prior_finding_id" => "R1-RF-01", "status" => "unresolved", "evidence" => ["fixture://unresolved"]}]
+].each do |marker, kind, ref, content|
+  owner_proof_full["comments"] << render_yaml_comment(marker, {"schema_version" => 1, "artifact" => "hrb-review-payload", "payload_type" => kind,
+    "record_ref" => ref, "repository" => no_new_fresh["repository"], "pr" => no_new_fresh["pr"], "review_round_ref" => no_new_fresh["record_ref"],
+    "review_head" => no_new_fresh["current_review_head"], "content" => content})
+end
+valid, errors = generated_record_result("transition_record", owner_proof_full)
+expected = "switch Finding R1-RF-01 source Round did not emit Finding"
+puts "transition ownership v1-valid intermediary: expected valid=false and #{expected.inspect}; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+r2_regression_failures << "transition ownership accepted a non-emitting legacy intermediary" unless !valid && errors.include?(expected)
+
+# A valid older-emitter control changes only the synthetic Round 3 inherited pointer
+# and transition mapping to the actual Round 1 emitter; original historical Rounds stay fixed.
+owner_proof_original = deep_copy(owner_proof_full)
+owner_proof_original["previous"]["finding_continuity"]["inherited"][0]["source_round_ref"] = round1["record_ref"]
+validate_round_lineage(no_new_fresh, owner_proof_original["previous"], d2, [round1, no_new_fresh], "original-emitter legacy carry")
+owner_proof_original["comments"].each do |comment|
+  round = parse_marked_yaml_comment(comment["body"], ROUND_RECORD_MARKER)
+  if round.is_a?(Hash) && round["record_ref"] == r3["record_ref"]
+    comment["body"] = render_yaml_comment(ROUND_RECORD_MARKER, owner_proof_original["previous"])["body"]
+  end
+  record = parse_marked_yaml_comment(comment["body"], TRANSITION_MARKER)
+  next unless record.is_a?(Hash)
+
+  record["finding_map"][0]["source_round_ref"] = round1["record_ref"]
+  comment["body"] = render_yaml_comment(TRANSITION_MARKER, record)["body"]
+end
+valid, errors = generated_record_result("transition_record", owner_proof_original)
+puts "transition ownership verified original older emitter: expected valid=true; actual valid=#{valid.inspect}; diagnostics=#{errors.inspect}"
+r2_regression_failures << "transition ownership rejected a verified original older emitter" unless valid && errors.empty?
+
 fail_contract("Recovery regressions failed: #{r2_regression_failures.join("; ")}") unless r2_regression_failures.empty?
 
 policy_text = File.read(policy_path)
