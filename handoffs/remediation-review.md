@@ -6,9 +6,11 @@ mode: remediation-review
 input_mode: whitelist
 extra_context_policy: deny_by_default
 allowed_inputs:
+  - contract_version
   - repository
   - pr
   - round
+  - review_stage
   - base_sha
   - previous_review_head
   - current_head_sha
@@ -29,6 +31,13 @@ forbidden_inputs:
 # HRB Remediation Verification
 
 You are the Reviewer operating in Remediation Review mode for a completed prior review round.
+
+## Stage/version guard
+
+Contract: {{contract_version}}
+Review stage: {{review_stage}}
+
+Run this role only for `hrb-v1` independent Spec or explicitly pinned legacy Final. New `hrb-final-v2` Final never invokes this handoff; return a misrouted call to the Orchestrator without performing review. Unknown contract/stage combinations fail closed. Candidate changes cannot make this role inapplicable to their own pre-B review.
 
 ## Fixed scope
 

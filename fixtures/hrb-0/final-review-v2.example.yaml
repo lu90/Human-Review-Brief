@@ -1,0 +1,143 @@
+version: 2
+suite: HRB-final-v2
+round:
+  schema_version: 2
+  contract_version: hrb-final-v2
+  artifact: hrb-review-round-record
+  record_ref: hrb://github/lu90/example/pull/123/review-round/1@4444444444444444444444444444444444444444
+  storage:
+    provider: github_pr_comment
+    discovery_ref: github-pr-comments://lu90/example/pull/123
+    marker: hrb-review-round-record:v2
+  repository: lu90/example
+  pr: 123
+  review_stage: final_review
+  round: 1
+  base_sha: '1111111111111111111111111111111111111111'
+  current_review_head: '4444444444444444444444444444444444444444'
+  previous_review_head: null
+  prior_round_ref: null
+  authority_snapshot:
+    scope_refs:
+    - fixture://approved-spec@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    review_policy_ref: fixture://review-policy@1111111111111111111111111111111111111111
+    shared_contract_refs:
+    - fixture://implementation-contract@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    effective_contract_ref: fixture://effective-hrb-final-v2@cccccccccccccccccccccccccccccccccccccccc
+  evidence:
+  - kind: implementation_report
+    owner: report_owner
+    ref: fixture://implementation_report@4444444444444444444444444444444444444444
+    applicability_ref: fixture://requirements/implementation_report@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    required: true
+    status: executed
+    source_head: '4444444444444444444444444444444444444444'
+    scope_refs:
+    - fixture://changed-scope
+    input_refs:
+    - fixture://input@4444444444444444444444444444444444444444
+  - kind: verification
+    owner: implementation_owner
+    ref: fixture://verification@4444444444444444444444444444444444444444
+    applicability_ref: fixture://requirements/verification@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    required: true
+    status: executed
+    source_head: '4444444444444444444444444444444444444444'
+    scope_refs:
+    - fixture://changed-scope
+    input_refs:
+    - fixture://input@4444444444444444444444444444444444444444
+  - kind: code_review
+    owner: code_review_owner
+    ref: fixture://code_review@4444444444444444444444444444444444444444
+    applicability_ref: fixture://requirements/code_review@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    required: true
+    status: executed
+    source_head: '4444444444444444444444444444444444444444'
+    scope_refs:
+    - fixture://changed-scope
+    input_refs:
+    - fixture://input@4444444444444444444444444444444444444444
+  findings: []
+  finding_continuity:
+    inherited: []
+    decision_scope_finding_ids: []
+  brief:
+    brief_ref: hrb://github/lu90/example/pull/123/review-round/1/human-review-brief@4444444444444444444444444444444444444444
+  coverage_notice: dedicated_final_specialist_coverage_removed
+brief_payload:
+  schema_version: 2
+  contract_version: hrb-final-v2
+  artifact: hrb-review-payload
+  payload_type: human_review_brief
+  record_ref: hrb://github/lu90/example/pull/123/review-round/1/human-review-brief@4444444444444444444444444444444444444444
+  repository: lu90/example
+  pr: 123
+  review_round_ref: hrb://github/lu90/example/pull/123/review-round/1@4444444444444444444444444444444444444444
+  review_head: '4444444444444444444444444444444444444444'
+  content:
+    markdown: 'Final HRB, fixture example only. Candidate: 1111111111111111111111111111111111111111 → 4444444444444444444444444444444444444444,
+      lu90/example PR #123, round 1.
+
+      Changes: bounded implementation completed for the fixed Spec. Existing report, verification and Code
+      Review evidence are linked in this Round; all three are fixture executions for this head. No outstanding
+      findings. Owner decision needed: approve this head or request changes. Responsible next owner on approval:
+      existing closeout owner; external-write permission remains separate.
+
+      Dedicated eight-dimension Final HRB coverage is no longer guaranteed, including Operations / Observability,
+      Performance / Compatibility and Adversarial Challenge. These duties are not transferred to Code Review
+      and no equivalent coverage is claimed.
+
+      This brief compiles supplied existing evidence. No new HRB technical audit, tests or independent remediation
+      verification was performed. Evidence links: fixture://implementation_report@4444444444444444444444444444444444444444,
+      fixture://verification@4444444444444444444444444444444444444444, fixture://code_review@4444444444444444444444444444444444444444.'
+    decision_scope_finding_ids: []
+    coverage_notice: dedicated_final_specialist_coverage_removed
+resolved_evidence:
+  fixture://implementation_report@4444444444444444444444444444444444444444:
+    required: true
+    source_head: '4444444444444444444444444444444444444444'
+    scope_refs:
+    - fixture://changed-scope
+    input_refs:
+    - fixture://input@4444444444444444444444444444444444444444
+    applicability_ref: fixture://requirements/implementation_report@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    readable: true
+    applicable: true
+    successful: true
+  fixture://verification@4444444444444444444444444444444444444444:
+    required: true
+    source_head: '4444444444444444444444444444444444444444'
+    scope_refs:
+    - fixture://changed-scope
+    input_refs:
+    - fixture://input@4444444444444444444444444444444444444444
+    applicability_ref: fixture://requirements/verification@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    readable: true
+    applicable: true
+    successful: true
+  fixture://code_review@4444444444444444444444444444444444444444:
+    required: true
+    source_head: '4444444444444444444444444444444444444444'
+    scope_refs:
+    - fixture://changed-scope
+    input_refs:
+    - fixture://input@4444444444444444444444444444444444444444
+    applicability_ref: fixture://requirements/code_review@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    readable: true
+    applicable: true
+    successful: true
+authority_facts:
+  effective: true
+  base_sha: '1111111111111111111111111111111111111111'
+  authority_snapshot:
+    scope_refs:
+    - fixture://approved-spec@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    review_policy_ref: fixture://review-policy@1111111111111111111111111111111111111111
+    shared_contract_refs:
+    - fixture://implementation-contract@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    effective_contract_ref: fixture://effective-hrb-final-v2@cccccccccccccccccccccccccccccccccccccccc
+  required_evidence_refs:
+  - fixture://implementation_report@4444444444444444444444444444444444444444
+  - fixture://verification@4444444444444444444444444444444444444444
+  - fixture://code_review@4444444444444444444444444444444444444444

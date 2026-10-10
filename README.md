@@ -4,7 +4,15 @@ Human Review Brief (HRB) is a human-attention layer for AI-assisted software dev
 
 AI can generate code, specifications, tickets, tests, and review reports faster than a human can read them. HRB does not try to replace review with a filter. Its job is to organize all review findings by attention priority, preserve traceability to source evidence, and compile them into a review surface a human can actually work through.
 
-## Core idea
+## Stage and version
+
+New Final work uses `hrb-final-v2` only after that contract is approved and effective: existing report + implementation/verification/Code Review evidence → chat brief → real Owner Decision → durable same-head PR-comment read-back. Final HRB adds no independent specialist audit, tests or remediation verification. Missing applicable evidence returns to its owner.
+
+Dedicated eight-dimension Final coverage is removed, including Operations / Observability, Performance / Compatibility and Adversarial Challenge; it is not transferred to Code Review and no equivalent coverage is claimed. Independent Spec review remains under `hrb-v1`. Historical and in-flight v1 work keeps its fixed contract; explicit switches retain unresolved Findings, evidence and permissions. Unknown versions fail closed. See [version selection](docs/HRB-0_PRODUCT_SPEC.md#32-select-the-effective-contract-before-execution) and [v2 records](docs/HRB-0_PRODUCT_SPEC.md#21-lightweight-final-contract-v2).
+
+The model below describes independent Spec and pinned legacy v1 execution only. WORKFLOW-EVOLUTION-B's own review remains pinned to its pre-B contract; the proposed simplification cannot approve itself.
+
+## Core idea (Spec and legacy v1)
 
 ```text
 Main Agent / Orchestrator
@@ -59,7 +67,7 @@ Raw Findings use stable IDs such as `R5-RF-01`: the sequence restarts each round
 
 Worker prompts are not rewritten from scratch each round. HRB uses canonical role-specific handoff templates under `handoffs/`; the Orchestrator fills only declared inputs. Fresh-review handoffs are deny-by-default and exclude prior findings, remediation conclusions, previous human decisions, author rationale, the implementation conversation, and the full Implementation Report. Final-review compilation may use the current Implementation Report after the Orchestrator verifies it is current.
 
-Every PR entering HRB first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
+Every Spec or pinned legacy v1 PR entering HRB first passes through the same independent specialist review dimensions. There is no up-front "material" or "mechanical" gate. The Reviewer returns Raw Findings; a separate Brief Compiler then orders every finding by **human-attention value**, explains the relevant risk dimensions, and generates a compact Markdown review surface with evidence chains and deep links such as:
 
 ```text
 src/orders/service.py#L120-L168

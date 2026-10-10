@@ -42,3 +42,9 @@ A PR that changes one of these artifacts MUST review the change itself rather th
 Changes to this file require explicit human review.
 
 An Agent may analyze or propose a policy change, but it cannot make that proposed policy authoritative for the PR in which the change appears.
+
+## Versioned stage boundary
+
+Use the fixed already-effective HRB contract for the current stage. Independent Spec review and pinned legacy v1 Final retain their specialist requirements. After approval and activation, `hrb-final-v2` Final compiles existing evidence and decisions without a new technical audit, tests or independent remediation verification. Missing applicable evidence returns to its owner; dedicated eight-dimension coverage is removed, not transferred to Code Review.
+
+A proposed contract or stage-policy change is reviewed under the base-effective contract. In particular, WORKFLOW-EVOLUTION-B cannot use this candidate to waive its own pre-B review gates. An in-flight switch requires separate explicit Owner authority and preserved unresolved Finding/evidence/permission continuity under Product Spec section 21.4.

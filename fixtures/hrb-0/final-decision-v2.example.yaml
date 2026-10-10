@@ -1,0 +1,30 @@
+schema_version: 2
+contract_version: hrb-final-v2
+artifact: hrb-review-decision-record
+record_ref: hrb://github/lu90/example/pull/123/decision/final_review/round-1/rev-1@4444444444444444444444444444444444444444
+storage:
+  provider: github_pr_comment
+  discovery_ref: github-pr-comments://lu90/example/pull/123
+  marker: hrb-review-decision-record:v2
+repository: lu90/example
+pr: 123
+review_round_ref: hrb://github/lu90/example/pull/123/review-round/1@4444444444444444444444444444444444444444
+review_head: '4444444444444444444444444444444444444444'
+stage: final_review
+revision: 1
+supersedes_ref: null
+completion: complete
+overall_decision: approve
+spec_status: still_valid
+required_finding_ids: []
+decision_sources:
+- source_id: fixture-owner-1
+  decided_by: fixture-owner
+  recorded_by: orchestrator
+  source_kind: human_statement
+  captured_statement: 'Fixture only: approve the Final brief for 4444444444444444444444444444444444444444.
+    This is simulated test input, not live approval.'
+  durable_source_ref: null
+overall_decision_source_ids:
+- fixture-owner-1
+findings: []

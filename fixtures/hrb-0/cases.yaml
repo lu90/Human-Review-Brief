@@ -492,3 +492,1228 @@ cases:
       - invent a Review Decision Record for an old round
       - convert absence of a decision into approval
 
+
+  - id: C24_FINAL_V2_COMPILATION
+    title: Final v2 compiles existing evidence without specialist work
+    input:
+      contract_version: hrb-final-v2
+      review_stage: final_review
+    expected:
+      route: lightweight_final
+      required_evidence_owner_return: true
+      coverage_loss_disclosed: true
+      code_review_inherits_eight_dimensions: false
+    must_not:
+      - run fresh technical audit tests or independent remediation verification in Final v2
+      - treat removed specialist coverage as missing required evidence
+
+  - id: C25_STAGE_VERSION_DISPATCH
+    title: Independent Spec and legacy work retain their fixed contract
+    input:
+      stages: [spec_review, final_review]
+      versions: [hrb-v1, hrb-final-v2, unknown]
+    expected:
+      spec_remains_independent: true
+      unknown_version_route: blocked
+      legacy_examples_unchanged: true
+    must_not:
+      - downgrade unknown versions to v1 or use v2 for Spec
+
+  - id: C26_FINAL_V2_RECOVERY
+    title: Same-head brief and real-source Decision recover without ambiguity
+    input:
+      round_fixture: final-review-v2.example.yaml
+      decision_fixture: final-decision-v2.example.yaml
+    expected:
+      exact_head_required: true
+      full_revision_graph_required: true
+      actual_payload_body_required: true
+    must_not:
+      - infer approval from missing source or timestamps
+
+  - id: C27_EXPLICIT_CONTRACT_SWITCH
+    title: In-flight switch preserves unresolved findings and permissions
+    input:
+      transition_fixture: contract-transition-v2.example.yaml
+    expected:
+      explicit_owner_source_required: true
+      unresolved_continuity_required: true
+      permissions_preserved: true
+    must_not:
+      - silently switch in-flight work or transfer old approval to new head
+
+  - id: C28_FINAL_EVIDENCE_REUSE
+    title: Existing factual evidence is reused only when still applicable
+    input:
+      changed_inputs: [head, scope, dependency, shared_contract]
+    expected:
+      original_execution_identity_preserved: true
+      affected_checks_return_to_owner: true
+    must_not:
+      - label old-head evidence as current execution or reuse human approval
+
+  - id: C29_CANDIDATE_AUTHORITY_BOUNDARY
+    title: Workflow B cannot self-approve through its proposed contract
+    input:
+      candidate: WORKFLOW-EVOLUTION-B
+      governing_contract: hrb-v1
+    expected:
+      fixed_pre_b_authority_required: true
+      separate_switch_approval_required: true
+    must_not:
+      - let candidate policy or references waive their own review
+
+generated_record_cases:
+- id: CASE25_ORIGINAL
+  check: final_gate
+  provenance:
+    case: 25_b_final_decision
+    source_kind: original_actor_redacted_negative
+    record_stream_ref: evidence/comments.json
+    source_stream_sha256: 641a97b82f9bd117bf9e1fd41f2101f32fe43b5a7a20457fabb2802d9c2becc2
+    comment_bodies:
+    - original_body_sha256: 3d527d8fd59cd819ebc7c7153b20f8a5189a3b4435728825dcd636c12a07162c
+      public_body_sha256: 3d527d8fd59cd819ebc7c7153b20f8a5189a3b4435728825dcd636c12a07162c
+      redactions: []
+    - original_body_sha256: 423ebfda4805f53c391a61bc66bef3b7b9daf80dba9829d37876261db26e0409
+      public_body_sha256: 423ebfda4805f53c391a61bc66bef3b7b9daf80dba9829d37876261db26e0409
+      redactions: []
+    - original_body_sha256: 20eb8a033c6e2bcad0c97b06d4b990f39dc094317fa6ae293d733d3cf0611424
+      public_body_sha256: 364e66c8ac1c22b4f84a81f08bfeffea18ac742b69f1aa501f08407da692f48e
+      redactions:
+      - field_class: synthetic recorder or transport label
+        replacement: fixture-orchestrator
+    skill_snapshot_sha256: f0c2332002c683276a00ef8a9683a43584cc40510fe219e58739d0b48672a6a5
+    synthetic_only: true
+    new_technical_execution: false
+    downstream_execution_authorized: false
+  input:
+    comments:
+    - body: "<!-- hrb-review-round-record:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\",\n \
+        \ \"artifact\": \"hrb-review-round-record\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-rounds/final-r1\"\
+        ,\n  \"storage\": {\n    \"provider\": \"github_pr_comment\",\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\"\
+        ,\n    \"marker\": \"hrb-review-round-record:v2\"\n  },\n  \"payload_storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\",\n    \"markers\": {\n \
+        \     \"human_review_brief\": \"hrb-human-review-brief:v2\"\n    }\n  },\n  \"round\": 1,\n  \"base_sha\": \"b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n  \"current_review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"previous_review_head\": null,\n \
+        \ \"prior_round_ref\": null,\n  \"authority_snapshot\": {\n    \"scope_refs\": [\n      \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        \n    ],\n    \"review_policy_ref\": \".hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n    \"shared_contract_refs\"\
+        : [\n      \"SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd\"\
+        \n    ],\n    \"effective_contract_ref\": \"SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6\"\
+        \n  },\n  \"evidence\": [\n    {\n      \"kind\": \"implementation_report\",\n      \"owner\": \"fixture-report-owner\"\
+        ,\n      \"ref\": \"evidence/REPORT.json\",\n      \"applicability_ref\": \"review-applicability-main.json\",\n  \
+        \    \"required\": true,\n      \"status\": \"executed\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"\
+        src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ]\n    },\n    {\n      \"kind\"\
+        : \"verification\",\n      \"owner\": \"fixture-implementer\",\n      \"ref\": \"evidence/verification.json\",\n \
+        \     \"applicability_ref\": \"review-applicability-main.json\",\n      \"required\": true,\n      \"status\": \"\
+        validly_reused\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n\
+        \        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        \n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n\
+        \        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ],\n      \"reuse_basis_ref\": \"review-applicability-main.json\"\
+        \n    },\n    {\n      \"kind\": \"code_review\",\n      \"owner\": \"fixture-independent-reviewer\",\n      \"ref\"\
+        : \"evidence/code-review.json\",\n      \"applicability_ref\": \"review-applicability-main.json\",\n      \"required\"\
+        : true,\n      \"status\": \"validly_reused\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"\
+        src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ],\n      \"reuse_basis_ref\": \"\
+        review-applicability-main.json\"\n    }\n  ],\n  \"findings\": [],\n  \"finding_continuity\": {\n    \"inherited\"\
+        : [],\n    \"decision_scope_finding_ids\": []\n  },\n  \"brief\": {\n    \"brief_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/payloads/final-r1-human-review-brief\"\
+        \n  }\n}\n```\n"
+    - body: "<!-- hrb-human-review-brief:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\",\n \
+        \ \"artifact\": \"hrb-review-payload\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/payloads/final-r1-human-review-brief\"\
+        ,\n  \"payload_type\": \"human_review_brief\",\n  \"review_round_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-rounds/final-r1\"\
+        ,\n  \"review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\",\n    \"marker\": \"hrb-human-review-brief:v2\"\
+        \n  },\n  \"content\": {\n    \"markdown\": \"Main delivery: Final human review, round 1, hrb-final-v2\\n\\nScope:\
+        \ synthetic/25_b_final_decision, PR 123; Phase P1; ChangeSet 25_b_final_decision. Base b5190f475153974e1efd6e0fa2c3b5965b2f0d23;\
+        \ fixed candidate 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. The approved scope is docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23.\
+        \ Base .hrb/REVIEW_POLICY.md already adopts hrb-final-v2; the fixed skill files were hash-verified against SKILL_SNAPSHOT.json.\
+        \ There is no contract switch or authority change in this candidate.\\n\\nWhat changed: src/counts.py changes count_total(values)\
+        \ from len(values) + 1 to len(values). The requested observable result is the list length, including zero for an empty\
+        \ list. The Git diff contains no other changed paths. This is a count correction, so refactor characterization/regression\
+        \ evidence is not applicable. No implementation deviation or deferred defect is reported by the supplied sources;\
+        \ that is not an independent audit conclusion.\\n\\nExisting evidence and limits:\\n- Current implementation report:\
+        \ evidence/REPORT.json, updated from inspected scope/diff and evidence availability before fixing this review head.\
+        \ It retains its historical technical evidence and current final_hrb position.\\n- Verification: evidence/verification.json\
+        \ is a fixed synthetic historical receipt at 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. It reports python3 -m unittest\
+        \ discover -s tests -v passed for empty-list and two-element cases, covering src/counts.py under docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23.\
+        \ It is reused as supplied; no test was run now.\\n- Code Review: evidence/code-review.json is fixed synthetic historical\
+        \ evidence from fixture-independent-reviewer at the exact candidate and baseline. It covers src/counts.py against\
+        \ Standards and Spec and reports no findings. It is reused as supplied; no independent Code Review occurred in this\
+        \ run.\\n- Applicability: review-applicability-main.json and review-git-inspection.json record exact heads, source\
+        \ identities, clean worktrees and unchanged Spec/standards. Original execution times/logs beyond the supplied receipts\
+        \ were not provided. Historical receipts are synthetic evidence, not newly executed tests or real review proof.\\\
+        n\\nComplete finding and decision index:\\n- A1–A4 index: no existing technical findings and no prior Round/Decision\
+        \ items to inherit. There are no per-finding dispositions to request.\\n\\nOwner decision needed: For synthetic/25_b_final_decision,\
+        \ PR 123, head 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40, do you approve this bounded delivery with the Spec still\
+        \ valid, request changes, or need a deeper explanation of existing evidence? No Final decision has been made or recorded.\
+        \ Approval would permit consideration of closeout only; external operations and closeout still need separate authorization.\\\
+        n\\nCoverage disclosure: Dedicated eight-dimension Final HRB coverage is no longer guaranteed, including Operations\
+        \ / Observability, Performance / Compatibility and Adversarial Challenge. These duties are not transferred to Code\
+        \ Review; no equivalent coverage is claimed.\\n\\nPrimary references: evidence/REPORT.json; evidence/code-review.json;\
+        \ evidence/verification.json; repo/docs/specs/change.md at b5190f475153974e1efd6e0fa2c3b5965b2f0d23; review-git-inspection.json;\
+        \ review-applicability-main.json; evidence/comments.json containing Round hrb://github/synthetic/25_b_final_decision/pull/123/review-rounds/final-r1\
+        \ and complete brief hrb://github/synthetic/25_b_final_decision/pull/123/payloads/final-r1-human-review-brief. These\
+        \ are case-local synthetic adapter records, not live GitHub comments.\\n\\nCurrent boundary: remain in Final HRB.\
+        \ Both Git repositories remain unchanged; no tests, fresh specialist review, independent remediation verification,\
+        \ commits, external writes or closeout actions were performed. Phase acceptance is separate and still requires its\
+        \ own exit evidence, including the out-of-delivery operations rehearsal.\\n\",\n    \"decision_scope_finding_ids\"\
+        : [],\n    \"coverage_notice\": \"dedicated_final_specialist_coverage_removed\"\n  }\n}\n```\n"
+    - body: "<!-- hrb-review-decision-record:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"artifact\": \"hrb-review-decision-record\"\
+        ,\n  \"contract_version\": \"hrb-final-v2\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-decisions/final-r1-revision-1\"\
+        ,\n  \"storage\": {\n    \"provider\": \"github_pr_comment\",\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\"\
+        ,\n    \"marker\": \"hrb-review-decision-record:v2\"\n  },\n  \"repository\": \"synthetic/25_b_final_decision\",\n\
+        \  \"pr\": 123,\n  \"review_round_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-rounds/final-r1\"\
+        ,\n  \"review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"review_stage\": \"final_review\",\n  \"revision\"\
+        : 1,\n  \"supersedes_ref\": null,\n  \"completion\": \"complete\",\n  \"overall_decision\": \"approve\",\n  \"spec_status\"\
+        : \"still_valid\",\n  \"required_finding_ids\": [],\n  \"finding_decisions\": [],\n  \"decision_sources\": [\n   \
+        \ {\n      \"source_ref\": \"review-owner-statement.json#message\",\n      \"source_kind\": \"synthetic_owner_message\"\
+        ,\n      \"owner\": \"fixture-owner\",\n      \"recorder\": \"fixture-orchestrator\",\n      \"statement\": \"Synthetic\
+        \ Owner decision for this fixture only: I approve the Final brief for synthetic/25_b_final_decision PR 123 at exact\
+        \ head 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. Please save this exact statement as my synthetic decision, read back\
+        \ the durable records, and report the remaining delivery state. I do not authorize merge, closeout, tracker closure,\
+        \ release, installation or cleanup.\",\n      \"source_locator\": \"review-owner-statement.json#message\",\n     \
+        \ \"reply_context_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/payloads/final-r1-human-review-brief\"\
+        ,\n      \"synthetic\": true,\n      \"not_real_project_approval\": true\n    }\n  ],\n  \"overall_decision_source_refs\"\
+        : [\n    \"review-owner-statement.json#message\"\n  ],\n  \"spec_status_source_refs\": [\n    \"review-owner-statement.json#message\"\
+        \n  ],\n  \"authorization_limits\": {\n    \"allowed\": [\n      \"save this synthetic decision locally\",\n     \
+        \ \"read back durable records\",\n      \"report remaining delivery state\"\n    ],\n    \"not_authorized\": [\n \
+        \     \"merge\",\n      \"closeout\",\n      \"tracker closure\",\n      \"release\",\n      \"installation\",\n \
+        \     \"cleanup\"\n    ]\n  },\n  \"normalization_note\": \"The exact later synthetic approval responds to the existing\
+        \ exact-head Final choice with the fixed Spec still valid. It supplies no real-project approval and no downstream\
+        \ operation authorization.\"\n}\n```\n"
+    round_ref: hrb://github/synthetic/25_b_final_decision/pull/123/review-rounds/final-r1
+    current_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+    resolved_evidence:
+      evidence/REPORT.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-main.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+      evidence/verification.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-main.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+        reuse_basis_ref: review-applicability-main.json
+        unaffected: true
+      evidence/code-review.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-main.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+        reuse_basis_ref: review-applicability-main.json
+        unaffected: true
+    authority_facts:
+      effective: true
+      base_sha: b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+      authority_snapshot:
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        review_policy_ref: .hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        shared_contract_refs:
+        - SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd
+        effective_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6
+      required_evidence_refs:
+      - evidence/REPORT.json
+      - evidence/verification.json
+      - evidence/code-review.json
+  expected:
+    route: blocked
+    error_includes:
+    - Final record_ref mismatch
+    - Final must disclose coverage removal
+    - uses Final v2 with an unsupported stage
+- id: CASE25_CORRECTED
+  check: final_gate
+  provenance:
+    case: 25_b_final_decision
+    source_kind: limited_regenerated_persisted_record
+    record_stream_ref: evidence/comments.json
+    source_stream_sha256: a5c2029631f3cbd2730d46bd071d325a73b3bc549993111ae88d5e0676eb58f2
+    comment_bodies:
+    - original_body_sha256: 59092c9bb8dcd6f47f2b6c1fc021c731bcb2b6891b5d9620dd5d15103847b0e3
+      public_body_sha256: 59092c9bb8dcd6f47f2b6c1fc021c731bcb2b6891b5d9620dd5d15103847b0e3
+      redactions: []
+    - original_body_sha256: 65421f01a54cdaa90c943d9ae52946846ce35365ccab37664f957a6caa926d0f
+      public_body_sha256: 65421f01a54cdaa90c943d9ae52946846ce35365ccab37664f957a6caa926d0f
+      redactions: []
+    - original_body_sha256: 62f1c9b9d39cf7ba06e4d2cc8c733e2167351d969961924e83b2483b161d268f
+      public_body_sha256: 62f1c9b9d39cf7ba06e4d2cc8c733e2167351d969961924e83b2483b161d268f
+      redactions: []
+    skill_snapshot_sha256: f0c2332002c683276a00ef8a9683a43584cc40510fe219e58739d0b48672a6a5
+    synthetic_only: true
+    new_technical_execution: false
+    downstream_execution_authorized: false
+  input:
+    comments:
+    - body: "<!-- hrb-review-round-record:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\",\n \
+        \ \"artifact\": \"hrb-review-round-record\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"storage\": {\n    \"provider\": \"github_pr_comment\",\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\"\
+        ,\n    \"marker\": \"hrb-review-round-record:v2\"\n  },\n  \"payload_storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\",\n    \"markers\": {\n \
+        \     \"human_review_brief\": \"hrb-human-review-brief:v2\"\n    }\n  },\n  \"round\": 1,\n  \"base_sha\": \"b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n  \"current_review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"previous_review_head\": null,\n \
+        \ \"prior_round_ref\": null,\n  \"authority_snapshot\": {\n    \"scope_refs\": [\n      \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        \n    ],\n    \"review_policy_ref\": \".hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n    \"shared_contract_refs\"\
+        : [\n      \"SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd\"\
+        \n    ],\n    \"effective_contract_ref\": \"SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6\"\
+        \n  },\n  \"evidence\": [\n    {\n      \"kind\": \"implementation_report\",\n      \"owner\": \"fixture-report-owner\"\
+        ,\n      \"ref\": \"evidence/REPORT.json\",\n      \"applicability_ref\": \"review-applicability-main.json\",\n  \
+        \    \"required\": true,\n      \"status\": \"executed\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"\
+        src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ]\n    },\n    {\n      \"kind\"\
+        : \"verification\",\n      \"owner\": \"fixture-implementer\",\n      \"ref\": \"evidence/verification.json\",\n \
+        \     \"applicability_ref\": \"review-applicability-main.json\",\n      \"required\": true,\n      \"status\": \"\
+        validly_reused\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n\
+        \        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        \n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n \
+        \     ],\n      \"reuse_basis_ref\": \"review-applicability-main.json\"\n    },\n    {\n      \"kind\": \"code_review\"\
+        ,\n      \"owner\": \"fixture-independent-reviewer\",\n      \"ref\": \"evidence/code-review.json\",\n      \"applicability_ref\"\
+        : \"review-applicability-main.json\",\n      \"required\": true,\n      \"status\": \"validly_reused\",\n      \"\
+        source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n       \
+        \ \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        \n      ],\n      \"reuse_basis_ref\": \"review-applicability-main.json\"\n    }\n  ],\n  \"findings\": [],\n  \"\
+        finding_continuity\": {\n    \"inherited\": [],\n    \"decision_scope_finding_ids\": []\n  },\n  \"brief\": {\n  \
+        \  \"brief_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        \n  },\n  \"coverage_notice\": \"dedicated_final_specialist_coverage_removed\"\n}\n```\n"
+    - body: "<!-- hrb-human-review-brief:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\",\n \
+        \ \"artifact\": \"hrb-review-payload\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"payload_type\": \"human_review_brief\",\n  \"review_round_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\",\n    \"marker\": \"hrb-human-review-brief:v2\"\
+        \n  },\n  \"content\": {\n    \"markdown\": \"Main delivery: Final human review, round 1, hrb-final-v2\\n\\nScope:\
+        \ synthetic/25_b_final_decision, PR 123; Phase P1; ChangeSet 25_b_final_decision. Base b5190f475153974e1efd6e0fa2c3b5965b2f0d23;\
+        \ fixed candidate 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. The approved scope is docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23.\
+        \ Base .hrb/REVIEW_POLICY.md already adopts hrb-final-v2; the fixed skill files were hash-verified against SKILL_SNAPSHOT.json.\
+        \ There is no contract switch or authority change in this candidate.\\n\\nWhat changed: src/counts.py changes count_total(values)\
+        \ from len(values) + 1 to len(values). The requested observable result is the list length, including zero for an empty\
+        \ list. The Git diff contains no other changed paths. This is a count correction, so refactor characterization/regression\
+        \ evidence is not applicable. No implementation deviation or deferred defect is reported by the supplied sources;\
+        \ that is not an independent audit conclusion.\\n\\nExisting evidence and limits:\\n- Current implementation report:\
+        \ evidence/REPORT.json, updated from inspected scope/diff and evidence availability before fixing this review head.\
+        \ It retains its historical technical evidence and current final_hrb position.\\n- Verification: evidence/verification.json\
+        \ is a fixed synthetic historical receipt at 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. It reports python3 -m unittest\
+        \ discover -s tests -v passed for empty-list and two-element cases, covering src/counts.py under docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23.\
+        \ It is reused as supplied; no test was run now.\\n- Code Review: evidence/code-review.json is fixed synthetic historical\
+        \ evidence from fixture-independent-reviewer at the exact candidate and baseline. It covers src/counts.py against\
+        \ Standards and Spec and reports no findings. It is reused as supplied; no independent Code Review occurred in this\
+        \ run.\\n- Applicability: review-applicability-main.json and review-git-inspection.json record exact heads, source\
+        \ identities, clean worktrees and unchanged Spec/standards. Original execution times/logs beyond the supplied receipts\
+        \ were not provided. Historical receipts are synthetic evidence, not newly executed tests or real review proof.\\\
+        n\\nComplete finding and decision index:\\n- A1–A4 index: no existing technical findings and no prior Round/Decision\
+        \ items to inherit. There are no per-finding dispositions to request.\\n\\nOwner decision needed: For synthetic/25_b_final_decision,\
+        \ PR 123, head 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40, do you approve this bounded delivery with the Spec still\
+        \ valid, request changes, or need a deeper explanation of existing evidence? No Final decision has been made or recorded.\
+        \ Approval would permit consideration of closeout only; external operations and closeout still need separate authorization.\\\
+        n\\nCoverage disclosure: Dedicated eight-dimension Final HRB coverage is no longer guaranteed, including Operations\
+        \ / Observability, Performance / Compatibility and Adversarial Challenge. These duties are not transferred to Code\
+        \ Review; no equivalent coverage is claimed.\\n\\nPrimary references: evidence/REPORT.json; evidence/code-review.json;\
+        \ evidence/verification.json; repo/docs/specs/change.md at b5190f475153974e1efd6e0fa2c3b5965b2f0d23; review-git-inspection.json;\
+        \ review-applicability-main.json; evidence/comments.json containing Round hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\
+        \ and complete brief hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40.\
+        \ These are case-local synthetic adapter records, not live GitHub comments.\\n\\nCurrent boundary: remain in Final\
+        \ HRB. Both Git repositories remain unchanged; no tests, fresh specialist review, independent remediation verification,\
+        \ commits, external writes or closeout actions were performed. Phase acceptance is separate and still requires its\
+        \ own exit evidence, including the out-of-delivery operations rehearsal.\\n\",\n    \"decision_scope_finding_ids\"\
+        : [],\n    \"coverage_notice\": \"dedicated_final_specialist_coverage_removed\"\n  }\n}\n```\n"
+    - body: "<!-- hrb-review-decision-record:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"artifact\": \"hrb-review-decision-record\"\
+        ,\n  \"contract_version\": \"hrb-final-v2\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/decision/final_review/round-1/rev-1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"storage\": {\n    \"provider\": \"github_pr_comment\",\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision/pull/123\"\
+        ,\n    \"marker\": \"hrb-review-decision-record:v2\"\n  },\n  \"repository\": \"synthetic/25_b_final_decision\",\n\
+        \  \"pr\": 123,\n  \"review_round_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"stage\": \"final_review\",\n  \"revision\"\
+        : 1,\n  \"supersedes_ref\": null,\n  \"completion\": \"complete\",\n  \"overall_decision\": \"approve\",\n  \"spec_status\"\
+        : \"still_valid\",\n  \"required_finding_ids\": [],\n  \"findings\": [],\n  \"decision_sources\": [\n    {\n     \
+        \ \"source_ref\": \"review-owner-statement.json#message\",\n      \"source_id\": \"review-owner-statement.json#message\"\
+        ,\n      \"source_kind\": \"human_statement\",\n      \"original_source_kind\": \"synthetic_owner_message\",\n   \
+        \   \"decided_by\": \"fixture-owner\",\n      \"recorded_by\": \"fixture-orchestrator\",\n      \"captured_statement\"\
+        : \"Synthetic Owner decision for this fixture only: I approve the Final brief for synthetic/25_b_final_decision PR\
+        \ 123 at exact head 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. Please save this exact statement as my synthetic decision,\
+        \ read back the durable records, and report the remaining delivery state. I do not authorize merge, closeout, tracker\
+        \ closure, release, installation or cleanup.\",\n      \"original_received_at\": \"2026-10-09T16:58:57.920715+00:00\"\
+        ,\n      \"source_locator\": \"review-owner-statement.json#message\",\n      \"reply_context_ref\": \"hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n      \"synthetic\": true,\n      \"not_real_project_approval\": true\n    }\n  ],\n  \"overall_decision_source_ids\"\
+        : [\n    \"review-owner-statement.json#message\"\n  ],\n  \"spec_status_source_ids\": [\n    \"review-owner-statement.json#message\"\
+        \n  ],\n  \"authorization_limits\": {\n    \"allowed\": [\n      \"save this synthetic decision locally\",\n     \
+        \ \"read back durable records\",\n      \"report remaining delivery state\"\n    ],\n    \"not_authorized\": [\n \
+        \     \"merge\",\n      \"closeout\",\n      \"tracker closure\",\n      \"release\",\n      \"installation\",\n \
+        \     \"cleanup\"\n    ]\n  },\n  \"normalization_note\": \"The exact later synthetic approval responds to the existing\
+        \ exact-head Final choice with the fixed Spec still valid. It supplies no real-project approval and no downstream\
+        \ operation authorization.\"\n}\n```\n"
+    round_ref: hrb://github/synthetic/25_b_final_decision/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+    current_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+    resolved_evidence:
+      evidence/REPORT.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-main.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+      evidence/verification.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-main.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+        reuse_basis_ref: review-applicability-main.json
+        unaffected: true
+      evidence/code-review.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-main.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+        reuse_basis_ref: review-applicability-main.json
+        unaffected: true
+    authority_facts:
+      effective: true
+      base_sha: b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+      authority_snapshot:
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        review_policy_ref: .hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        shared_contract_refs:
+        - SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd
+        effective_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6
+      required_evidence_refs:
+      - evidence/REPORT.json
+      - evidence/verification.json
+      - evidence/code-review.json
+  expected:
+    route: closeout
+    error_includes: []
+- id: CASE25_VARIANT_ORIGINAL
+  check: final_gate
+  provenance:
+    case: 25_b_final_decision
+    source_kind: original_negative
+    record_stream_ref: variant/evidence/comments.json
+    source_stream_sha256: 82f171e7fd8852c6035030169aabbe3a9c9c6783fa271d2312859484da5a4d5e
+    comment_bodies:
+    - original_body_sha256: 105e51669f0fc68c031707d63c382cb8c66c02dcdc86e7c41714f354bd47618d
+      public_body_sha256: 105e51669f0fc68c031707d63c382cb8c66c02dcdc86e7c41714f354bd47618d
+      redactions: []
+    - original_body_sha256: 9938465a93a74cfb5878ba2cdaef5a242777d69110bc4993a0a912d5ef1c6ac5
+      public_body_sha256: 9938465a93a74cfb5878ba2cdaef5a242777d69110bc4993a0a912d5ef1c6ac5
+      redactions: []
+    skill_snapshot_sha256: f0c2332002c683276a00ef8a9683a43584cc40510fe219e58739d0b48672a6a5
+    synthetic_only: true
+    new_technical_execution: false
+    downstream_execution_authorized: false
+  input:
+    comments:
+    - body: "<!-- hrb-review-round-record:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision-variant\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\"\
+        ,\n  \"artifact\": \"hrb-review-round-record\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-rounds/final-r1\"\
+        ,\n  \"storage\": {\n    \"provider\": \"github_pr_comment\",\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision-variant/pull/123\"\
+        ,\n    \"marker\": \"hrb-review-round-record:v2\"\n  },\n  \"payload_storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision-variant/pull/123\",\n    \"markers\"\
+        : {\n      \"human_review_brief\": \"hrb-human-review-brief:v2\"\n    }\n  },\n  \"round\": 1,\n  \"base_sha\": \"\
+        b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n  \"current_review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"previous_review_head\": null,\n  \"prior_round_ref\": null,\n  \"authority_snapshot\": {\n    \"scope_refs\"\
+        : [\n      \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n    ],\n    \"review_policy_ref\": \"\
+        .hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n    \"shared_contract_refs\": [\n      \"SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd\"\
+        \n    ],\n    \"effective_contract_ref\": \"SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6\"\
+        \n  },\n  \"evidence\": [\n    {\n      \"kind\": \"implementation_report\",\n      \"owner\": \"fixture-report-owner\"\
+        ,\n      \"ref\": \"variant/evidence/REPORT.json\",\n      \"applicability_ref\": \"review-applicability-variant.json\"\
+        ,\n      \"required\": true,\n      \"status\": \"executed\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"\
+        src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ]\n    },\n    {\n      \"kind\"\
+        : \"verification\",\n      \"owner\": \"fixture-implementer\",\n      \"ref\": \"variant/evidence/verification.json\"\
+        ,\n      \"applicability_ref\": \"review-applicability-variant.json\",\n      \"required\": true,\n      \"status\"\
+        : \"unverified\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n\
+        \        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        \n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n\
+        \        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ],\n      \"reason\": \"Required variant/evidence/verification.json\
+        \ does not exist; return to fixture-implementer.\"\n    },\n    {\n      \"kind\": \"code_review\",\n      \"owner\"\
+        : \"fixture-independent-reviewer\",\n      \"ref\": \"variant/evidence/code-review.json\",\n      \"applicability_ref\"\
+        : \"review-applicability-variant.json\",\n      \"required\": true,\n      \"status\": \"validly_reused\",\n     \
+        \ \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n       \
+        \ \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        \n      ],\n      \"reuse_basis_ref\": \"review-applicability-variant.json\"\n    }\n  ],\n  \"findings\": [\n   \
+        \ {\n      \"finding_id\": \"R1-F1\",\n      \"attention\": \"A1\",\n      \"claim\": \"Required verification receipt\
+        \ is missing for this delivery; the report references verification.json but variant/evidence/verification.json does\
+        \ not exist.\",\n      \"source_ref\": \"variant/evidence/REPORT.json#/required_evidence/1\",\n      \"evidence_refs\"\
+        : [\n        \"review-applicability-variant.json\",\n        \"variant/evidence/REPORT.json#/verification\"\n    \
+        \  ],\n      \"responsible_owner\": \"fixture-implementer\"\n    }\n  ],\n  \"finding_continuity\": {\n    \"inherited\"\
+        : [],\n    \"decision_scope_finding_ids\": [\n      \"R1-F1\"\n    ]\n  },\n  \"brief\": {\n    \"brief_ref\": \"\
+        hrb://github/synthetic/25_b_final_decision-variant/pull/123/payloads/final-r1-human-review-brief\"\n  }\n}\n```\n"
+    - body: "<!-- hrb-human-review-brief:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision-variant\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\"\
+        ,\n  \"artifact\": \"hrb-review-payload\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/payloads/final-r1-human-review-brief\"\
+        ,\n  \"payload_type\": \"human_review_brief\",\n  \"review_round_ref\": \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-rounds/final-r1\"\
+        ,\n  \"review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision-variant/pull/123\",\n    \"marker\"\
+        : \"hrb-human-review-brief:v2\"\n  },\n  \"content\": {\n    \"markdown\": \"Variant delivery: Final human review,\
+        \ round 1, hrb-final-v2\\n\\nScope: synthetic/25_b_final_decision-variant, PR 123; Phase P1; ChangeSet 25_b_final_decision.\
+        \ Base b5190f475153974e1efd6e0fa2c3b5965b2f0d23; fixed candidate 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. The approved\
+        \ scope is docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23. Base .hrb/REVIEW_POLICY.md already adopts\
+        \ hrb-final-v2; the fixed skill files were hash-verified against SKILL_SNAPSHOT.json. There is no contract switch\
+        \ or authority change in this candidate.\\n\\nWhat changed: src/counts.py changes count_total(values) from len(values)\
+        \ + 1 to len(values). The requested observable result is the list length, including zero for an empty list. The Git\
+        \ diff contains no other changed paths. This is a count correction, so refactor characterization/regression evidence\
+        \ is not applicable. No implementation deviation or deferred defect is reported by the supplied sources; that is not\
+        \ an independent audit conclusion.\\n\\nExisting evidence and limits:\\n- Current implementation report: variant/evidence/REPORT.json,\
+        \ updated from inspected scope/diff and evidence availability before fixing this review head. It retains its historical\
+        \ technical evidence and current final_hrb position.\\n- Verification: variant/evidence/verification.json is absent.\
+        \ The delivery report requires this receipt. Its claimed historical verification cannot be resolved, so verification\
+        \ is unverified; the main delivery receipt is not substituted.\\n- Code Review: variant/evidence/code-review.json\
+        \ is fixed synthetic historical evidence from fixture-independent-reviewer at the exact candidate and baseline. It\
+        \ covers src/counts.py against Standards and Spec and reports no findings. It is reused as supplied; no independent\
+        \ Code Review occurred in this run.\\n- Applicability: review-applicability-variant.json and review-git-inspection.json\
+        \ record exact heads, source identities, clean worktrees and unchanged Spec/standards. Original execution times/logs\
+        \ beyond the supplied receipts were not provided. Historical receipts are synthetic evidence, not newly executed tests\
+        \ or real review proof.\\n\\nComplete finding and decision index:\\n- A1 R1-F1: required verification evidence is\
+        \ missing. Source: variant/evidence/REPORT.json, required_evidence and verification entries; absence recorded in review-applicability-variant.json.\
+        \ Responsible owner: fixture-implementer. This is an evidence blocker, not a newly discovered implementation defect.\\\
+        n- A2–A4: no other compiled or inherited findings.\\n\\nNext owner: fixture-implementer must provide the required\
+        \ verification result with its original head, inputs, command, outcome and coverage. Then refresh applicability and\
+        \ the Final brief. Owner may discuss R1-F1 or request changes now, but approval cannot route past this required-evidence\
+        \ blocker. No Final decision has been made or recorded.\\n\\nCoverage disclosure: Dedicated eight-dimension Final\
+        \ HRB coverage is no longer guaranteed, including Operations / Observability, Performance / Compatibility and Adversarial\
+        \ Challenge. These duties are not transferred to Code Review; no equivalent coverage is claimed.\\n\\nPrimary references:\
+        \ variant/evidence/REPORT.json; variant/evidence/code-review.json; variant/evidence/verification.json (missing); variant/repo/docs/specs/change.md\
+        \ at b5190f475153974e1efd6e0fa2c3b5965b2f0d23; review-git-inspection.json; review-applicability-variant.json; variant/evidence/comments.json\
+        \ containing Round hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-rounds/final-r1 and complete\
+        \ brief hrb://github/synthetic/25_b_final_decision-variant/pull/123/payloads/final-r1-human-review-brief. These are\
+        \ case-local synthetic adapter records, not live GitHub comments.\\n\\nCurrent boundary: remain in Final HRB. Both\
+        \ Git repositories remain unchanged; no tests, fresh specialist review, independent remediation verification, commits,\
+        \ external writes or closeout actions were performed. Phase acceptance is separate and still requires its own exit\
+        \ evidence, including the out-of-delivery operations rehearsal.\\n\",\n    \"decision_scope_finding_ids\": [\n   \
+        \   \"R1-F1\"\n    ],\n    \"coverage_notice\": \"dedicated_final_specialist_coverage_removed\"\n  }\n}\n```\n"
+    round_ref: hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-rounds/final-r1
+    current_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+    resolved_evidence:
+      variant/evidence/REPORT.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-variant.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+      variant/evidence/verification.json:
+        readable: false
+        applicable: false
+        required: true
+        applicability_ref: review-applicability-variant.json
+      variant/evidence/code-review.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-variant.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+        reuse_basis_ref: review-applicability-variant.json
+        unaffected: true
+    authority_facts:
+      effective: true
+      base_sha: b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+      authority_snapshot:
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        review_policy_ref: .hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        shared_contract_refs:
+        - SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd
+        effective_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6
+      required_evidence_refs:
+      - variant/evidence/REPORT.json
+      - variant/evidence/verification.json
+      - variant/evidence/code-review.json
+  expected:
+    route: blocked
+    error_includes:
+    - Final record_ref mismatch
+    - Final must disclose coverage removal
+    - Final current finding ID invalid
+- id: CASE25_VARIANT_CORRECTED
+  check: final_gate
+  provenance:
+    case: 25_b_final_decision
+    source_kind: limited_regenerated_persisted_record
+    record_stream_ref: variant/evidence/comments.json
+    source_stream_sha256: a5e31ec9330608bb1dc76dae7900b06cc422599fc47da54c3943bdacbdca7b05
+    comment_bodies:
+    - original_body_sha256: 752b014bdf18dcb34c4927e6b735da6895e948ab6e3803efc6acb2b76e7c3a6e
+      public_body_sha256: 752b014bdf18dcb34c4927e6b735da6895e948ab6e3803efc6acb2b76e7c3a6e
+      redactions: []
+    - original_body_sha256: 39d41cc07216d19028d609aaa107e925f3f908a814fbe015e154582e36f821b1
+      public_body_sha256: 39d41cc07216d19028d609aaa107e925f3f908a814fbe015e154582e36f821b1
+      redactions: []
+    skill_snapshot_sha256: f0c2332002c683276a00ef8a9683a43584cc40510fe219e58739d0b48672a6a5
+    synthetic_only: true
+    new_technical_execution: false
+    downstream_execution_authorized: false
+  input:
+    comments:
+    - body: "<!-- hrb-review-round-record:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision-variant\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\"\
+        ,\n  \"artifact\": \"hrb-review-round-record\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"storage\": {\n    \"provider\": \"github_pr_comment\",\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision-variant/pull/123\"\
+        ,\n    \"marker\": \"hrb-review-round-record:v2\"\n  },\n  \"payload_storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision-variant/pull/123\",\n    \"markers\"\
+        : {\n      \"human_review_brief\": \"hrb-human-review-brief:v2\"\n    }\n  },\n  \"round\": 1,\n  \"base_sha\": \"\
+        b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n  \"current_review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"previous_review_head\": null,\n  \"prior_round_ref\": null,\n  \"authority_snapshot\": {\n    \"scope_refs\"\
+        : [\n      \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n    ],\n    \"review_policy_ref\": \"\
+        .hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n    \"shared_contract_refs\": [\n      \"SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd\"\
+        \n    ],\n    \"effective_contract_ref\": \"SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6\"\
+        \n  },\n  \"evidence\": [\n    {\n      \"kind\": \"implementation_report\",\n      \"owner\": \"fixture-report-owner\"\
+        ,\n      \"ref\": \"variant/evidence/REPORT.json\",\n      \"applicability_ref\": \"review-applicability-variant.json\"\
+        ,\n      \"required\": true,\n      \"status\": \"executed\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"\
+        src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ]\n    },\n    {\n      \"kind\"\
+        : \"verification\",\n      \"owner\": \"fixture-implementer\",\n      \"ref\": \"variant/evidence/verification.json\"\
+        ,\n      \"applicability_ref\": \"review-applicability-variant.json\",\n      \"required\": true,\n      \"status\"\
+        : \"unverified\",\n      \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n\
+        \        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        \n      ],\n      \"input_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n\
+        \        \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\n      ],\n      \"reason\": \"Required variant/evidence/verification.json\
+        \ does not exist; return to fixture-implementer.\"\n    },\n    {\n      \"kind\": \"code_review\",\n      \"owner\"\
+        : \"fixture-independent-reviewer\",\n      \"ref\": \"variant/evidence/code-review.json\",\n      \"applicability_ref\"\
+        : \"review-applicability-variant.json\",\n      \"required\": true,\n      \"status\": \"validly_reused\",\n     \
+        \ \"source_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n      \"scope_refs\": [\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        ,\n        \"src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\n      ],\n      \"input_refs\": [\n       \
+        \ \"docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\",\n        \"docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23\"\
+        \n      ],\n      \"reuse_basis_ref\": \"review-applicability-variant.json\"\n    }\n  ],\n  \"findings\": [\n   \
+        \ {\n      \"finding_id\": \"R1-RF-01\",\n      \"attention\": \"A1\",\n      \"claim\": \"Required verification receipt\
+        \ is missing for this delivery; the report references verification.json but variant/evidence/verification.json does\
+        \ not exist.\",\n      \"source_ref\": \"variant/evidence/REPORT.json#/required_evidence/1\",\n      \"evidence_refs\"\
+        : [\n        \"review-applicability-variant.json\",\n        \"variant/evidence/REPORT.json#/verification\"\n    \
+        \  ],\n      \"responsible_owner\": \"fixture-implementer\"\n    }\n  ],\n  \"finding_continuity\": {\n    \"inherited\"\
+        : [],\n    \"decision_scope_finding_ids\": [\n      \"R1-RF-01\"\n    ]\n  },\n  \"brief\": {\n    \"brief_ref\":\
+        \ \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        \n  },\n  \"coverage_notice\": \"dedicated_final_specialist_coverage_removed\"\n}\n```\n"
+    - body: "<!-- hrb-human-review-brief:v2 -->\n```yaml\n{\n  \"schema_version\": 2,\n  \"contract_version\": \"hrb-final-v2\"\
+        ,\n  \"repository\": \"synthetic/25_b_final_decision-variant\",\n  \"pr\": 123,\n  \"review_stage\": \"final_review\"\
+        ,\n  \"artifact\": \"hrb-review-payload\",\n  \"record_ref\": \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"payload_type\": \"human_review_brief\",\n  \"review_round_ref\": \"hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\"\
+        ,\n  \"review_head\": \"4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\",\n  \"storage\": {\n    \"provider\": \"github_pr_comment\"\
+        ,\n    \"discovery_ref\": \"github-pr-comments://synthetic/25_b_final_decision-variant/pull/123\",\n    \"marker\"\
+        : \"hrb-human-review-brief:v2\"\n  },\n  \"content\": {\n    \"markdown\": \"Variant delivery: Final human review,\
+        \ round 1, hrb-final-v2\\n\\nScope: synthetic/25_b_final_decision-variant, PR 123; Phase P1; ChangeSet 25_b_final_decision.\
+        \ Base b5190f475153974e1efd6e0fa2c3b5965b2f0d23; fixed candidate 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40. The approved\
+        \ scope is docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23. Base .hrb/REVIEW_POLICY.md already adopts\
+        \ hrb-final-v2; the fixed skill files were hash-verified against SKILL_SNAPSHOT.json. There is no contract switch\
+        \ or authority change in this candidate.\\n\\nWhat changed: src/counts.py changes count_total(values) from len(values)\
+        \ + 1 to len(values). The requested observable result is the list length, including zero for an empty list. The Git\
+        \ diff contains no other changed paths. This is a count correction, so refactor characterization/regression evidence\
+        \ is not applicable. No implementation deviation or deferred defect is reported by the supplied sources; that is not\
+        \ an independent audit conclusion.\\n\\nExisting evidence and limits:\\n- Current implementation report: variant/evidence/REPORT.json,\
+        \ updated from inspected scope/diff and evidence availability before fixing this review head. It retains its historical\
+        \ technical evidence and current final_hrb position.\\n- Verification: variant/evidence/verification.json is absent.\
+        \ The delivery report requires this receipt. Its claimed historical verification cannot be resolved, so verification\
+        \ is unverified; the main delivery receipt is not substituted.\\n- Code Review: variant/evidence/code-review.json\
+        \ is fixed synthetic historical evidence from fixture-independent-reviewer at the exact candidate and baseline. It\
+        \ covers src/counts.py against Standards and Spec and reports no findings. It is reused as supplied; no independent\
+        \ Code Review occurred in this run.\\n- Applicability: review-applicability-variant.json and review-git-inspection.json\
+        \ record exact heads, source identities, clean worktrees and unchanged Spec/standards. Original execution times/logs\
+        \ beyond the supplied receipts were not provided. Historical receipts are synthetic evidence, not newly executed tests\
+        \ or real review proof.\\n\\nComplete finding and decision index:\\n- A1 R1-RF-01: required verification evidence\
+        \ is missing. Source: variant/evidence/REPORT.json, required_evidence and verification entries; absence recorded in\
+        \ review-applicability-variant.json. Responsible owner: fixture-implementer. This is an evidence blocker, not a newly\
+        \ discovered implementation defect.\\n- A2–A4: no other compiled or inherited findings.\\n\\nNext owner: fixture-implementer\
+        \ must provide the required verification result with its original head, inputs, command, outcome and coverage. Then\
+        \ refresh applicability and the Final brief. Owner may discuss R1-RF-01 or request changes now, but approval cannot\
+        \ route past this required-evidence blocker. No Final decision has been made or recorded.\\n\\nCoverage disclosure:\
+        \ Dedicated eight-dimension Final HRB coverage is no longer guaranteed, including Operations / Observability, Performance\
+        \ / Compatibility and Adversarial Challenge. These duties are not transferred to Code Review; no equivalent coverage\
+        \ is claimed.\\n\\nPrimary references: variant/evidence/REPORT.json; variant/evidence/code-review.json; variant/evidence/verification.json\
+        \ (missing); variant/repo/docs/specs/change.md at b5190f475153974e1efd6e0fa2c3b5965b2f0d23; review-git-inspection.json;\
+        \ review-applicability-variant.json; variant/evidence/comments.json containing Round hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40\
+        \ and complete brief hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1/human-review-brief@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40.\
+        \ These are case-local synthetic adapter records, not live GitHub comments.\\n\\nCurrent boundary: remain in Final\
+        \ HRB. Both Git repositories remain unchanged; no tests, fresh specialist review, independent remediation verification,\
+        \ commits, external writes or closeout actions were performed. Phase acceptance is separate and still requires its\
+        \ own exit evidence, including the out-of-delivery operations rehearsal.\\n\",\n    \"decision_scope_finding_ids\"\
+        : [\n      \"R1-RF-01\"\n    ],\n    \"coverage_notice\": \"dedicated_final_specialist_coverage_removed\"\n  }\n}\n\
+        ```\n"
+    round_ref: hrb://github/synthetic/25_b_final_decision-variant/pull/123/review-round/1@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+    current_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+    resolved_evidence:
+      variant/evidence/REPORT.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-variant.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+      variant/evidence/verification.json:
+        readable: false
+        applicable: false
+        required: true
+        applicability_ref: review-applicability-variant.json
+      variant/evidence/code-review.json:
+        readable: true
+        applicable: true
+        required: true
+        applicability_ref: review-applicability-variant.json
+        source_head: 4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - src/counts.py@4e3c60ca315253e5fc3fa4f3647c35e9bce0ac40
+        input_refs:
+        - docs/standards.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        successful: true
+        reuse_basis_ref: review-applicability-variant.json
+        unaffected: true
+    authority_facts:
+      effective: true
+      base_sha: b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+      authority_snapshot:
+        scope_refs:
+        - docs/specs/change.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        review_policy_ref: .hrb/REVIEW_POLICY.md@b5190f475153974e1efd6e0fa2c3b5965b2f0d23
+        shared_contract_refs:
+        - SKILL_SNAPSHOT.json:matt-workflow-guidelines/references/implementation-contract.md@sha256:d6e4dcf7eed6f3b2d8df2e0d5f3a859f8fc5eb431651f955638a4dd6effee3bd
+        effective_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6
+      required_evidence_refs:
+      - variant/evidence/REPORT.json
+      - variant/evidence/verification.json
+      - variant/evidence/code-review.json
+  expected:
+    route: blocked
+    error_includes:
+    - required evidence unverified
+    - evidence unreadable/inapplicable
+    - expected exactly one effective unsuperseded decision, got 0
+- id: CASE29_ORIGINAL
+  check: transition_record
+  provenance:
+    case: 29_b_contract_recovery
+    source_kind: original_actor_redacted_negative
+    record_stream_ref: project_c/evidence/comments.json
+    source_stream_sha256: 63d1c328824bf6b90e40f43aceec41c825c2f08bd4fb6c02aef882d59b6a7dac
+    comment_bodies:
+    - original_body_sha256: 68a1d01a5cef6be8ee9af2d6cbe75467ec165fb72b41964ba96a84fc861fe8a5
+      public_body_sha256: 68a1d01a5cef6be8ee9af2d6cbe75467ec165fb72b41964ba96a84fc861fe8a5
+      redactions: []
+    - original_body_sha256: 7ea91bd79a92603796f035aa5c386525ecd18c3ac6e961eff0581e12811632b2
+      public_body_sha256: 7ea91bd79a92603796f035aa5c386525ecd18c3ac6e961eff0581e12811632b2
+      redactions: []
+    - original_body_sha256: 65e9189c73423a629863db57a322986112a635412cae232fecb5ee5d645b43e2
+      public_body_sha256: 65e9189c73423a629863db57a322986112a635412cae232fecb5ee5d645b43e2
+      redactions: []
+    - original_body_sha256: ec058aceb93e0a0d7e6d109512bed5890a5c0f70f6d83b39d1979660c1b16b28
+      public_body_sha256: ec058aceb93e0a0d7e6d109512bed5890a5c0f70f6d83b39d1979660c1b16b28
+      redactions: []
+    - original_body_sha256: 3a6aa490e823c5d839c6cec1ab3d3943299e33c64fe64550a77b09434f0d077b
+      public_body_sha256: 4faca94068a4f01cc4dd53568812da507022fe6368ef8fcdea820f4b417efa4e
+      redactions:
+      - field_class: synthetic recorder or transport label
+        replacement: fixture-orchestrator
+      - field_class: synthetic recorder or transport label
+        replacement: synthetic fixture input
+    skill_snapshot_sha256: f0c2332002c683276a00ef8a9683a43584cc40510fe219e58739d0b48672a6a5
+    synthetic_only: true
+    new_technical_execution: false
+    stage: transition_persisted_only
+    current_v2_round_created: false
+    candidate_approval: false
+    source_v1_comment_bodies_unchanged: true
+  input:
+    comments:
+    - body: "<!-- hrb-raw-findings:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-payload\npayload_type: raw_findings\n\
+        record_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nreview_round_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nreview_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\ncontent:\n  findings:\n    - finding_id: R1-RF-01\n \
+        \     claim: \"At elapsed 30 the code returns Timeout contrary to the canonical scope.\"\n      evidence:\n      \
+        \  - \"src/timeout.py:deadline comparison\"\n```"
+    - body: "<!-- hrb-human-review-brief:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-payload\npayload_type: human_review_brief\n\
+        record_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/human-review-brief@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nreview_round_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nreview_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\ncontent:\n  markdown: |\n    # Human Review Brief\n \
+        \   R1-RF-01 requires Owner review.\n```"
+    - body: "<!-- hrb-review-round-record:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-round-record\nrecord_ref:\
+        \ \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nstorage:\n  provider: github_pr_comment\n  discovery_ref: \"github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\"\
+        \n  marker: \"hrb-review-round-record:v1\"\nrepository: synthetic/29_b_contract_recovery-c\npr: 123\npayload_storage:\n\
+        \  provider: github_pr_comment\n  discovery_ref: \"github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\"\
+        \n  markers:\n    raw_findings: \"hrb-raw-findings:v1\"\n    human_review_brief: \"hrb-human-review-brief:v1\"\n \
+        \   remediation_evidence: \"hrb-remediation-evidence:v1\"\nreview_stage: final_review\nround: 1\nbase_sha: \"318ad4ffd9407fe8cc798a36a189dd444f8c42ba\"\
+        \ncurrent_review_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\nprevious_review_head: null\n\nfresh_review:\n\
+        \  scope: base_to_current_head\n  prior_findings_visible_to_reviewer: false\n  reviewer_isolation:\n    status: achieved\n\
+        \    method: fresh_context\n  raw_findings_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \n  finding_ids:\n    - R1-RF-01\n  coverage_manifest:\n    spec_scope: reviewed_with_findings\n    architecture_correctness:\
+        \ reviewed_no_finding\n    tests_verification: reviewed_no_finding\n    security_privacy: reviewed_no_finding\n  \
+        \  data_migrations: reviewed_no_finding\n    operations_observability: reviewed_no_finding\n    performance_compatibility:\
+        \ reviewed_no_finding\n    adversarial_challenge: reviewed_no_finding\n\nremediation_verification: null\n\nfinding_continuity:\n\
+        \  inherited: []\n  decision_scope_finding_ids:\n    - R1-RF-01\n\nbrief:\n  compiler_isolation:\n    status: achieved\n\
+        \    method: fresh_context\n  brief_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/human-review-brief@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \n\nproject_context: {\"entry_ref\": \"ROADMAP.md#p1\", \"phase_id\": \"P1\", \"changeset_id\": \"CS-RECOVERY\", \"\
+        scope_ref\": \"specs/change.md@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\", \"shared_contracts\": [{\"ref\": \"domain/shared-policy.md\"\
+        , \"revision\": \"318ad4ffd9407fe8cc798a36a189dd444f8c42ba\"}]}\n```"
+    - body: "<!-- hrb-review-decision-record:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-decision-record\nrecord_ref:\
+        \ \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nstorage:\n  provider: github_pr_comment\n  discovery_ref: \"github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\"\
+        \n  marker: \"hrb-review-decision-record:v1\"\nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nreview_round_ref:\
+        \ \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nreview_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\nstage: final_review\nrevision: 1\nsupersedes_ref: null\n\
+        completion: complete\noverall_decision: request_changes\nspec_status: still_valid\nrequired_finding_ids:\n  - R1-RF-01\n\
+        decision_sources:\n  - source_id: owner-r1\n    decided_by: owner\n    recorded_by: orchestrator\n    source_kind:\
+        \ human_statement\n    captured_statement: \"Keep the Spec. Fix R1-RF-01 in the current PR.\"\n    durable_source_ref:\
+        \ null\noverall_decision_source_ids:\n  - owner-r1\nfindings:\n  - finding_id: R1-RF-01\n    disposition: remediate\n\
+        \    owner_decision: \"Fix R1-RF-01 within the approved implementation scope.\"\n    remediation_constraints: []\n\
+        \    decision_source_ids:\n      - owner-r1\n```"
+    - body: "<!-- hrb-contract-transition:v2 -->\n```yaml\nschema_version: 2\nartifact: hrb-contract-transition\nrecord_ref:\
+        \ hrb://github/synthetic/29_b_contract_recovery-c/pull/123/contract-transition/hrb-v1-to-hrb-final-v2@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        storage:\n  provider: github_pr_comment\n  discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\n\
+        \  marker: hrb-contract-transition:v2\nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nbase_sha: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba\n\
+        review_stage: final_review\ncurrent_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\ncurrent_state:\n  current_step:\
+        \ final_hrb\n  status: in_progress\n  route: human_review\n  pending_finding_ids:\n  - R1-RF-01\n  candidate_approved:\
+        \ false\nsource_round_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        old_contract_version: hrb-v1\nold_contract_ref: lu90/Human-Review-Brief@0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c\n\
+        new_contract_version: hrb-final-v2\nnew_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6\n\
+        owner_source:\n  synthetic: true\n  not_real_project_approval: true\n  source_id: synthetic-owner-turn-2-project-c-contract-switch\n\
+        \  decided_by: synthetic-owner\n  recorded_by: fixture-orchestrator\n  source_kind: synthetic_user_statement\n  received_via:\
+        \ synthetic fixture input\n  captured_statement: 'Synthetic Owner statement for project_c only: switch the in-flight\n\
+        \    Final at exact head 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071 from hrb-v1 at 0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c\n\
+        \    to the already-effective hrb-final-v2 in this case’s fixed skill snapshot. Keep\n    the original authorization\
+        \ scope and every unresolved Finding, including R1-RF-01.\n    Save the transition in the existing offline PR record\
+        \ stream. This is not approval\n    of the candidate or permission to repair code, test, merge or close out.'\n  recorded_at:\
+        \ '2026-10-09T17:10:22.827108+00:00'\n  scope: project_c only; transition persistence; no candidate approval or implementation/test/merge/closeout\n\
+        \    authority\n  durable_source_ref: recovery/turn-2/OWNER_STATEMENT.json\nauthorization_scope:\n  preserved: true\n\
+        \  source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  scope:\n    finding_ids:\n    - R1-RF-01\n    approved_spec_ref: specs/change.md@318ad4ffd9407fe8cc798a36a189dd444f8c42ba\n\
+        \    governing_scope_unchanged: true\n  project_context:\n    entry_ref: ROADMAP.md#p1\n    phase_id: P1\n    changeset_id:\
+        \ CS-RECOVERY\n    scope_ref: specs/change.md@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n    shared_contracts:\n  \
+        \  - ref: domain/shared-policy.md\n      revision: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba\n  authorized_now:\n \
+        \ - append this project_c transition to the existing offline PR comments stream\n  - update the existing case-local\
+        \ delivery report with the recovered contract switch\n  not_authorized_now:\n  - candidate approval\n  - implementation\
+        \ or repair\n  - tests\n  - new technical review\n  - merge\n  - closeout\n  - network or real GitHub writes\n  authority_refs:\n\
+        \  - SCENARIO.md\n  - recovery/turn-2/OWNER_STATEMENT.json\nfinding_map:\n- finding_id: R1-RF-01\n  source_round_ref:\
+        \ hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  source_disposition: remediate\n  carried_forward_finding_id: R1-RF-01\n  disposition_after_switch: remediate\n\
+        \  responsible_owner: existing project_c implementation owner; synthetic Owner retains\n    disposition authority\n\
+        \  evidence_refs:\n  - hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  - hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        evidence_applicability_refs:\n- recovery/turn-2/evidence-applicability.json\n- recovery/turn-2/source-record-validation.json\n\
+        - recovery/turn-2/git-authority-checks.json\ncandidate_approval_granted: false\nnext_round_requirement: A later authorized\
+        \ v2 Final Round must reference this transition\n  and include inherited R1-RF-01 with its original source Round.\
+        \ No new Round or Decision\n  is created by this transition.\nsynthetic: true\nnot_live_github: true\n```"
+    transition_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/contract-transition/hrb-v1-to-hrb-final-v2@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+    previous:
+      schema_version: 1
+      artifact: hrb-review-round-record
+      record_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      storage:
+        provider: github_pr_comment
+        discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123
+        marker: hrb-review-round-record:v1
+      repository: synthetic/29_b_contract_recovery-c
+      pr: 123
+      payload_storage:
+        provider: github_pr_comment
+        discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123
+        markers:
+          raw_findings: hrb-raw-findings:v1
+          human_review_brief: hrb-human-review-brief:v1
+          remediation_evidence: hrb-remediation-evidence:v1
+      review_stage: final_review
+      round: 1
+      base_sha: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba
+      current_review_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      previous_review_head: null
+      fresh_review:
+        scope: base_to_current_head
+        prior_findings_visible_to_reviewer: false
+        reviewer_isolation:
+          status: achieved
+          method: fresh_context
+        raw_findings_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+        finding_ids:
+        - R1-RF-01
+        coverage_manifest:
+          spec_scope: reviewed_with_findings
+          architecture_correctness: reviewed_no_finding
+          tests_verification: reviewed_no_finding
+          security_privacy: reviewed_no_finding
+          data_migrations: reviewed_no_finding
+          operations_observability: reviewed_no_finding
+          performance_compatibility: reviewed_no_finding
+          adversarial_challenge: reviewed_no_finding
+      remediation_verification: null
+      finding_continuity:
+        inherited: []
+        decision_scope_finding_ids:
+        - R1-RF-01
+      brief:
+        compiler_isolation:
+          status: achieved
+          method: fresh_context
+        brief_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/human-review-brief@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      project_context:
+        entry_ref: ROADMAP.md#p1
+        phase_id: P1
+        changeset_id: CS-RECOVERY
+        scope_ref: specs/change.md@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+        shared_contracts:
+        - ref: domain/shared-policy.md
+          revision: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba
+    previous_decision:
+      schema_version: 1
+      artifact: hrb-review-decision-record
+      record_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      storage:
+        provider: github_pr_comment
+        discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123
+        marker: hrb-review-decision-record:v1
+      repository: synthetic/29_b_contract_recovery-c
+      pr: 123
+      review_round_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      review_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      stage: final_review
+      revision: 1
+      supersedes_ref: null
+      completion: complete
+      overall_decision: request_changes
+      spec_status: still_valid
+      required_finding_ids:
+      - R1-RF-01
+      decision_sources:
+      - source_id: owner-r1
+        decided_by: owner
+        recorded_by: orchestrator
+        source_kind: human_statement
+        captured_statement: Keep the Spec. Fix R1-RF-01 in the current PR.
+        durable_source_ref: null
+      overall_decision_source_ids:
+      - owner-r1
+      findings:
+      - finding_id: R1-RF-01
+        disposition: remediate
+        owner_decision: Fix R1-RF-01 within the approved implementation scope.
+        remediation_constraints: []
+        decision_source_ids:
+        - owner-r1
+    facts:
+      owner_authorized: true
+      descendant: true
+      source_records_valid: true
+      permissions_preserved: true
+      new_contract_effective: true
+      transition_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/contract-transition/hrb-v1-to-hrb-final-v2@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      authorization_scope_refs:
+      - SCENARIO.md
+      - recovery/turn-2/OWNER_STATEMENT.json
+      - recovery/turn-2/progress-before.json#/scope
+      old_contract_ref: lu90/Human-Review-Brief@0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c
+      new_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6
+      source_round_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      current_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      evidence_applicability_refs:
+      - recovery/turn-2/evidence-applicability.json
+      - recovery/turn-2/source-record-validation.json
+      - recovery/turn-2/git-authority-checks.json
+  expected:
+    valid: false
+    error_includes:
+    - switch current state missing
+    - switch requires real Owner source statement
+    - switch authorization scope missing
+- id: CASE29_CORRECTED
+  check: transition_record
+  provenance:
+    case: 29_b_contract_recovery
+    source_kind: limited_regenerated_persisted_record
+    record_stream_ref: project_c/evidence/comments.json
+    source_stream_sha256: 2364465f567cb3f5beae652a664918c3a54d4566e437364c853707164f7b2aab
+    comment_bodies:
+    - original_body_sha256: 68a1d01a5cef6be8ee9af2d6cbe75467ec165fb72b41964ba96a84fc861fe8a5
+      public_body_sha256: 68a1d01a5cef6be8ee9af2d6cbe75467ec165fb72b41964ba96a84fc861fe8a5
+      redactions: []
+    - original_body_sha256: 7ea91bd79a92603796f035aa5c386525ecd18c3ac6e961eff0581e12811632b2
+      public_body_sha256: 7ea91bd79a92603796f035aa5c386525ecd18c3ac6e961eff0581e12811632b2
+      redactions: []
+    - original_body_sha256: 65e9189c73423a629863db57a322986112a635412cae232fecb5ee5d645b43e2
+      public_body_sha256: 65e9189c73423a629863db57a322986112a635412cae232fecb5ee5d645b43e2
+      redactions: []
+    - original_body_sha256: ec058aceb93e0a0d7e6d109512bed5890a5c0f70f6d83b39d1979660c1b16b28
+      public_body_sha256: ec058aceb93e0a0d7e6d109512bed5890a5c0f70f6d83b39d1979660c1b16b28
+      redactions: []
+    - original_body_sha256: e96406f0b7963ae1bf5a3eb44e7189ca5d58b55dd2d9b4203a22deb125b6c89c
+      public_body_sha256: e96406f0b7963ae1bf5a3eb44e7189ca5d58b55dd2d9b4203a22deb125b6c89c
+      redactions: []
+    skill_snapshot_sha256: f0c2332002c683276a00ef8a9683a43584cc40510fe219e58739d0b48672a6a5
+    synthetic_only: true
+    new_technical_execution: false
+    stage: transition_persisted_only
+    current_v2_round_created: false
+    candidate_approval: false
+    source_v1_comment_bodies_unchanged: true
+  input:
+    comments:
+    - body: "<!-- hrb-raw-findings:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-payload\npayload_type: raw_findings\n\
+        record_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nreview_round_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nreview_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\ncontent:\n  findings:\n    - finding_id: R1-RF-01\n \
+        \     claim: \"At elapsed 30 the code returns Timeout contrary to the canonical scope.\"\n      evidence:\n      \
+        \  - \"src/timeout.py:deadline comparison\"\n```"
+    - body: "<!-- hrb-human-review-brief:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-payload\npayload_type: human_review_brief\n\
+        record_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/human-review-brief@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nreview_round_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nreview_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\ncontent:\n  markdown: |\n    # Human Review Brief\n \
+        \   R1-RF-01 requires Owner review.\n```"
+    - body: "<!-- hrb-review-round-record:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-round-record\nrecord_ref:\
+        \ \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nstorage:\n  provider: github_pr_comment\n  discovery_ref: \"github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\"\
+        \n  marker: \"hrb-review-round-record:v1\"\nrepository: synthetic/29_b_contract_recovery-c\npr: 123\npayload_storage:\n\
+        \  provider: github_pr_comment\n  discovery_ref: \"github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\"\
+        \n  markers:\n    raw_findings: \"hrb-raw-findings:v1\"\n    human_review_brief: \"hrb-human-review-brief:v1\"\n \
+        \   remediation_evidence: \"hrb-remediation-evidence:v1\"\nreview_stage: final_review\nround: 1\nbase_sha: \"318ad4ffd9407fe8cc798a36a189dd444f8c42ba\"\
+        \ncurrent_review_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\nprevious_review_head: null\n\nfresh_review:\n\
+        \  scope: base_to_current_head\n  prior_findings_visible_to_reviewer: false\n  reviewer_isolation:\n    status: achieved\n\
+        \    method: fresh_context\n  raw_findings_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \n  finding_ids:\n    - R1-RF-01\n  coverage_manifest:\n    spec_scope: reviewed_with_findings\n    architecture_correctness:\
+        \ reviewed_no_finding\n    tests_verification: reviewed_no_finding\n    security_privacy: reviewed_no_finding\n  \
+        \  data_migrations: reviewed_no_finding\n    operations_observability: reviewed_no_finding\n    performance_compatibility:\
+        \ reviewed_no_finding\n    adversarial_challenge: reviewed_no_finding\n\nremediation_verification: null\n\nfinding_continuity:\n\
+        \  inherited: []\n  decision_scope_finding_ids:\n    - R1-RF-01\n\nbrief:\n  compiler_isolation:\n    status: achieved\n\
+        \    method: fresh_context\n  brief_ref: \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/human-review-brief@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \n\nproject_context: {\"entry_ref\": \"ROADMAP.md#p1\", \"phase_id\": \"P1\", \"changeset_id\": \"CS-RECOVERY\", \"\
+        scope_ref\": \"specs/change.md@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\", \"shared_contracts\": [{\"ref\": \"domain/shared-policy.md\"\
+        , \"revision\": \"318ad4ffd9407fe8cc798a36a189dd444f8c42ba\"}]}\n```"
+    - body: "<!-- hrb-review-decision-record:v1 -->\n```yaml\nschema_version: 1\nartifact: hrb-review-decision-record\nrecord_ref:\
+        \ \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nstorage:\n  provider: github_pr_comment\n  discovery_ref: \"github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\"\
+        \n  marker: \"hrb-review-decision-record:v1\"\nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nreview_round_ref:\
+        \ \"hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\
+        \nreview_head: \"9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\"\nstage: final_review\nrevision: 1\nsupersedes_ref: null\n\
+        completion: complete\noverall_decision: request_changes\nspec_status: still_valid\nrequired_finding_ids:\n  - R1-RF-01\n\
+        decision_sources:\n  - source_id: owner-r1\n    decided_by: owner\n    recorded_by: orchestrator\n    source_kind:\
+        \ human_statement\n    captured_statement: \"Keep the Spec. Fix R1-RF-01 in the current PR.\"\n    durable_source_ref:\
+        \ null\noverall_decision_source_ids:\n  - owner-r1\nfindings:\n  - finding_id: R1-RF-01\n    disposition: remediate\n\
+        \    owner_decision: \"Fix R1-RF-01 within the approved implementation scope.\"\n    remediation_constraints: []\n\
+        \    decision_source_ids:\n      - owner-r1\n```"
+    - body: "<!-- hrb-contract-transition:v2 -->\n```yaml\nschema_version: 2\nartifact: hrb-contract-transition\nrecord_ref:\
+        \ hrb://github/synthetic/29_b_contract_recovery-c/pull/123/contract-transition/hrb-v1-to-hrb-final-v2@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        storage:\n  provider: github_pr_comment\n  discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123\n\
+        \  marker: hrb-contract-transition:v2\nrepository: synthetic/29_b_contract_recovery-c\npr: 123\nbase_sha: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba\n\
+        review_stage: final_review\ncurrent_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\ncurrent_state: final_hrb\ncurrent_state_details:\n\
+        \  current_step: final_hrb\n  status: in_progress\n  route: human_review\n  pending_finding_ids:\n  - R1-RF-01\n \
+        \ candidate_approved: false\nsource_round_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        old_contract_version: hrb-v1\nold_contract_ref: lu90/Human-Review-Brief@0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c\n\
+        new_contract_version: hrb-final-v2\nnew_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6\n\
+        decision_source:\n  source_id: synthetic-owner-turn-2-project-c-contract-switch\n  source_kind: human_statement\n\
+        \  decided_by: synthetic-owner\n  recorded_by: fixture-orchestrator\n  captured_statement: 'Synthetic Owner statement\
+        \ for project_c only: switch the in-flight\n    Final at exact head 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071 from\
+        \ hrb-v1 at 0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c\n    to the already-effective hrb-final-v2 in this case’s fixed\
+        \ skill snapshot. Keep\n    the original authorization scope and every unresolved Finding, including R1-RF-01.\n \
+        \   Save the transition in the existing offline PR record stream. This is not approval\n    of the candidate or permission\
+        \ to repair code, test, merge or close out.'\n  recorded_at: '2026-10-09T17:10:22.827108+00:00'\n  durable_source_ref:\
+        \ recovery/turn-2/OWNER_STATEMENT.json\n  synthetic: true\n  not_real_project_approval: true\nauthorization_scope_refs:\n\
+        - SCENARIO.md\n- recovery/turn-2/OWNER_STATEMENT.json\n- recovery/turn-2/progress-before.json#/scope\nauthorization_scope:\n\
+        \  preserved: true\n  source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  scope:\n    finding_ids:\n    - R1-RF-01\n    approved_spec_ref: specs/change.md@318ad4ffd9407fe8cc798a36a189dd444f8c42ba\n\
+        \    governing_scope_unchanged: true\n  project_context:\n    entry_ref: ROADMAP.md#p1\n    phase_id: P1\n    changeset_id:\
+        \ CS-RECOVERY\n    scope_ref: specs/change.md@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n    shared_contracts:\n  \
+        \  - ref: domain/shared-policy.md\n      revision: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba\n  authorized_now:\n \
+        \ - append this project_c transition to the existing offline PR comments stream\n  - update the existing case-local\
+        \ delivery report with the recovered contract switch\n  not_authorized_now:\n  - candidate approval\n  - implementation\
+        \ or repair\n  - tests\n  - new technical review\n  - merge\n  - closeout\n  - network or real GitHub writes\n  authority_refs:\n\
+        \  - SCENARIO.md\n  - recovery/turn-2/OWNER_STATEMENT.json\nfinding_map:\n- finding_id: R1-RF-01\n  source_round_ref:\
+        \ hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  source_disposition: remediate\n  carried_forward_finding_id: R1-RF-01\n  disposition_after_switch: remediate\n\
+        \  responsible_owner: existing project_c implementation owner; synthetic Owner retains\n    disposition authority\n\
+        \  evidence_refs:\n  - hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        \  - hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071\n\
+        evidence_applicability_refs:\n- recovery/turn-2/evidence-applicability.json\n- recovery/turn-2/source-record-validation.json\n\
+        - recovery/turn-2/git-authority-checks.json\ncandidate_approval_granted: false\nnext_round_requirement: A later authorized\
+        \ v2 Final Round must reference this transition\n  and include inherited R1-RF-01 with its original source Round.\
+        \ No new Round or Decision\n  is created by this transition.\nsynthetic: true\nnot_live_github: true\n```"
+    transition_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/contract-transition/hrb-v1-to-hrb-final-v2@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+    previous:
+      schema_version: 1
+      artifact: hrb-review-round-record
+      record_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      storage:
+        provider: github_pr_comment
+        discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123
+        marker: hrb-review-round-record:v1
+      repository: synthetic/29_b_contract_recovery-c
+      pr: 123
+      payload_storage:
+        provider: github_pr_comment
+        discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123
+        markers:
+          raw_findings: hrb-raw-findings:v1
+          human_review_brief: hrb-human-review-brief:v1
+          remediation_evidence: hrb-remediation-evidence:v1
+      review_stage: final_review
+      round: 1
+      base_sha: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba
+      current_review_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      previous_review_head: null
+      fresh_review:
+        scope: base_to_current_head
+        prior_findings_visible_to_reviewer: false
+        reviewer_isolation:
+          status: achieved
+          method: fresh_context
+        raw_findings_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/raw-findings@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+        finding_ids:
+        - R1-RF-01
+        coverage_manifest:
+          spec_scope: reviewed_with_findings
+          architecture_correctness: reviewed_no_finding
+          tests_verification: reviewed_no_finding
+          security_privacy: reviewed_no_finding
+          data_migrations: reviewed_no_finding
+          operations_observability: reviewed_no_finding
+          performance_compatibility: reviewed_no_finding
+          adversarial_challenge: reviewed_no_finding
+      remediation_verification: null
+      finding_continuity:
+        inherited: []
+        decision_scope_finding_ids:
+        - R1-RF-01
+      brief:
+        compiler_isolation:
+          status: achieved
+          method: fresh_context
+        brief_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1/human-review-brief@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      project_context:
+        entry_ref: ROADMAP.md#p1
+        phase_id: P1
+        changeset_id: CS-RECOVERY
+        scope_ref: specs/change.md@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+        shared_contracts:
+        - ref: domain/shared-policy.md
+          revision: 318ad4ffd9407fe8cc798a36a189dd444f8c42ba
+    previous_decision:
+      schema_version: 1
+      artifact: hrb-review-decision-record
+      record_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      storage:
+        provider: github_pr_comment
+        discovery_ref: github-pr-comments://synthetic/29_b_contract_recovery-c/pull/123
+        marker: hrb-review-decision-record:v1
+      repository: synthetic/29_b_contract_recovery-c
+      pr: 123
+      review_round_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      review_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      stage: final_review
+      revision: 1
+      supersedes_ref: null
+      completion: complete
+      overall_decision: request_changes
+      spec_status: still_valid
+      required_finding_ids:
+      - R1-RF-01
+      decision_sources:
+      - source_id: owner-r1
+        decided_by: owner
+        recorded_by: orchestrator
+        source_kind: human_statement
+        captured_statement: Keep the Spec. Fix R1-RF-01 in the current PR.
+        durable_source_ref: null
+      overall_decision_source_ids:
+      - owner-r1
+      findings:
+      - finding_id: R1-RF-01
+        disposition: remediate
+        owner_decision: Fix R1-RF-01 within the approved implementation scope.
+        remediation_constraints: []
+        decision_source_ids:
+        - owner-r1
+    facts:
+      owner_authorized: true
+      descendant: true
+      source_records_valid: true
+      permissions_preserved: true
+      new_contract_effective: true
+      transition_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/contract-transition/hrb-v1-to-hrb-final-v2@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      authorization_scope_refs:
+      - SCENARIO.md
+      - recovery/turn-2/OWNER_STATEMENT.json
+      - recovery/turn-2/progress-before.json#/scope
+      old_contract_ref: lu90/Human-Review-Brief@0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c
+      new_contract_ref: SKILL_SNAPSHOT.json:human-review-brief/docs/HRB-0_PRODUCT_SPEC.md@sha256:ee110bc089c94ec5f5d9b6603135be2be1b8a18f355a9c9a07388a5b2df42ba6
+      source_round_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/review-round/1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      source_decision_ref: hrb://github/synthetic/29_b_contract_recovery-c/pull/123/decision/final_review/round-1/rev-1@9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      current_head: 9fa46e70e2fd0d82bd8db960ca3e53e9140a8071
+      evidence_applicability_refs:
+      - recovery/turn-2/evidence-applicability.json
+      - recovery/turn-2/source-record-validation.json
+      - recovery/turn-2/git-authority-checks.json
+  expected:
+    valid: true
+    error_includes: []

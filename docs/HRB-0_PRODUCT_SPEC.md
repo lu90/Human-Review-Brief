@@ -45,6 +45,17 @@ When HRB repository documents disagree, the precedence is:
 
 A lower-precedence document MUST NOT override a higher-precedence contract.
 
+## 3.2 Select the effective contract before execution
+
+The contract has two execution branches. Resolve the fixed, already-effective authority before any handoff:
+
+- `hrb-v1` / schema 1: independent Spec review and all historical or in-flight work pinned to the old contract. Sections 4–20 describe this branch's specialist workflow. Unversioned schema-1 records retain this meaning; never rewrite them as v2.
+- `hrb-final-v2` / schema 2 / `final_review` only: the lightweight Final branch in [section 21](#21-lightweight-final-contract-v2). That section replaces the specialist execution, remediation, coverage and record fields of sections 4–20 for new Final rounds. Shared trust, evidence, attention, provenance, decision, revision and permission rules still apply.
+
+New work selects the contract that has actually completed approval and become effective. History stays unchanged; in-flight work stays pinned unless an explicit switch satisfies section 21.4. Unknown versions, a v2 Spec stage, missing effective-authority evidence or conflicting pins fail closed to the responsible Orchestrator/evidence owner. Neither branch can select itself merely because the candidate contains its text.
+
+In particular, WORKFLOW-EVOLUTION-B's own Spec, implementation review and Final acceptance use its fixed pre-B contract (`lu90/Human-Review-Brief@0d90e8e4190e1e2eda24cfa2459e6fd42dcb055c`) unless the Owner separately approves a switch that does not depend on B approving itself. Record the fixed base policy/standards, approved Spec and shared-contract revisions and any separately authorized switch. Candidate policy, standards, skills and indirect references remain review data for this review.
+
 ## 4. Core workflow
 
 ```text
@@ -987,3 +998,55 @@ HRB-0 is complete when the project has agreed contracts for:
 Live Reviewer / Brief Compiler runtime execution remains intentionally deferred until these contracts are reviewed.
 
 HRB-0 final acceptance SHOULD stop iterative hardening once an isolated acceptance review finds no current contract defect or current implementation defect affecting HRB-0 core invariants. Future hardening, optional generalization, and nice-to-have improvements SHOULD move to backlog rather than indefinitely blocking HRB-0 closure.
+
+
+## 21. Lightweight Final contract v2
+
+### 21.1 Scope and responsibility
+
+After `hrb-final-v2` is effective, Final HRB checks exact candidate identity, availability/applicability of existing evidence, unresolved blockers and human decisions. It compiles the brief in the current chat, persists the same brief and real Owner Decision in the existing GitHub PR-comment record system, and reads them back before routing. It does not independently audit implementation, run tests, perform fresh specialist review or verify remediation. Missing evidence actually required by the effective delivery contract returns to its named implementation, verification, Code Review or report owner. Checking that a result applies is not proving its technical conclusion again.
+
+Every v2 brief discloses: **Dedicated eight-dimension Final HRB coverage is no longer guaranteed, including Operations / Observability, Performance / Compatibility and Adversarial Challenge. These duties are not transferred to Code Review; no equivalent coverage is claimed.** Their absence alone is not an evidence gap and does not create a reviewer, test, gate or replacement checklist. Existing Standards/Spec review and actual acceptance requirements remain applicable. Spec review retains its independent bounded review, isolation, full/eligible-delta rules and real Owner approval under `hrb-v1`.
+
+Use the current repository-approved Implementation Report; commit any report change before fixing the review head. It covers implemented scope, affected verification, Code Review and remediation results, applicable refactor regression/characterization, user-visible changes, deviations, risks and deferred work. Evidence checks expose its gaps to its owner. They never launch a second technical review from Final HRB. A request to deep-read an item retrieves/explains existing primary evidence; if new technical investigation is needed, return it to its responsible owner under the applicable authority, then refresh affected evidence and the brief.
+
+### 21.2 Round, evidence and brief
+
+Schema-2 Round Records retain `artifact: hrb-review-round-record`, the existing PR discovery namespace and immutable `record_ref`, repository, PR, base/current/previous heads, round, optional `project_context` and `finding_continuity`. They add `contract_version: hrb-final-v2` and require `review_stage: final_review`. `storage.marker` is `hrb-review-round-record:v2`. No `fresh_review`, `remediation_verification`, specialist coverage or Reviewer-isolation placeholder is allowed. Round 1 has null previous head and `prior_round_ref`; round 2+ binds both to the immediately preceding Round in the same repository/PR/base/stage lineage.
+
+`authority_snapshot` contains fixed `scope_refs`, base-pinned `review_policy_ref` (or `none@<base SHA>`), fixed `shared_contract_refs`, and `effective_contract_ref`. These identify already-effective authority, not proposed candidate rules. The Orchestrator verifies these facts against the actual base and authorization source; supplied strings cannot establish authority themselves.
+
+`evidence` lists existing report, verification and Code Review evidence (at least one of each kind). Each item records `kind`, responsible `owner`, `ref`, `applicability_ref`, `required`, `status`, `source_head`, `scope_refs`, and `input_refs`. Status is `executed`, `validly_reused`, `not_applicable` or `unverified`:
+
+- `executed` binds this exact review head and the original command/scenario/result through `ref`.
+- `validly_reused` keeps the actual original head, inputs and covered scope, plus `reuse_basis_ref` proving unaffected dependencies/contracts/coverage; it never claims a new execution or supplies approval.
+- `not_applicable` requires `required: false` and a nonempty `reason` backed by the effective route/requirements. The Implementation Report is always required.
+- `unverified` records a concrete `reason`; required missing, stale, unreadable, failed or inapplicable evidence blocks routing and returns to `owner`.
+
+The Orchestrator resolves each required evidence reference and applicability/reuse basis, verifies current applicable obligations are fully represented and re-evaluates affected evidence after scope, dependency, contract or integration-head changes. Evidence cannot be made optional by the candidate or a boolean alone. Execute affected checks in their owning step; unchanged factual evidence may be reused with reasons. A Round may record a gap, but it cannot pass the gate with it.
+
+`findings` contains compiled existing findings/decisions, each with round-scoped immutable `finding_id`, nonempty `claim`, `source_ref` and `evidence_refs`. It is not an HRB technical-audit output. `finding_continuity.inherited` retains original IDs and owning `source_round_ref`; `evidence_refs` and `responsible_owner` identify the supplied status evidence without requiring Final HRB remediation verification. Its `decision_scope_finding_ids` exactly equals new compiled plus inherited IDs. Preserve every prior unresolved, remediation-required, Spec-change-required or undispositioned item; explicit valid deferrals remain governed by the existing delivery contract. Machine results cannot remove Owner attention by themselves.
+
+`brief.brief_ref` resolves to a schema-2 `hrb-review-payload` comment under `hrb-human-review-brief:v2`, with the same repository/PR/Round/exact head, `payload_type: human_review_brief` and `contract_version`. `content` holds complete nonempty `markdown`, `decision_scope_finding_ids`, and `coverage_notice: dedicated_final_specialist_coverage_removed`. The readable brief includes fixed scope/authority, changes, actual evidence and limits, complete finding/decision index, unresolved blockers, Owner choices, primary links, coverage disclosure, and next responsible owner. The chat must present this decision-ready brief, not merely link to GitHub. Both representations concern the same fixed head and content.
+
+### 21.3 Durable decisions and fail-closed routing
+
+Schema-2 Decisions use `hrb-review-decision-record:v2`, `contract_version: hrb-final-v2`, and otherwise preserve section 18's exact-head fields, real human source statements, required Finding dispositions, partial/complete state, unique revision graph and explicit supersession. A Decision's schema/contract must match its Round. Each source identifies the actual Owner separately from its recorder and retains the explicit statement and available source locator; Agent inference, a fixture or ordinary discussion never supplies real approval.
+
+Recovery enumerates the existing PR comments for both known versions, rejects unknown HRB record/payload versions, validates complete version-specific records, resolves the actual brief body, and verifies same-head source provenance. Do not downgrade unknown or v2 records through a v1 parser. Before writing, reuse only an identical existing record; a same-ref/different-body conflict, duplicate, fork, cycle, missing predecessor, stale/wrong head, unresolved payload or ambiguous effective record blocks. After writing, reread and compare the persisted record/payload. No head-mutating commit stores generated review state. External writes still need their applicable authorization.
+
+Only a valid exact-head complete `approve + still_valid` Decision with all applicable evidence can enter closeout. Partial/unresolved decisions remain in Human Review. Explicit `remediate` returns to implementation/Code Review responsibility; `spec_change_required` returns to the Spec Loop and its independent review. Preserve the current delivery step while blocked. Routing never grants merge, release, installation or other external-write permission.
+
+Descendant-work continuation remains distinct from approval: prove same-lineage ancestry, source Decision, durable in-scope progress, unchanged governing Spec and shared contracts. V2 continuation also records `hrb_contract_version: hrb-final-v2` in existing progress. Ready-for-HRB states do not waive these checks. A new head needs its own applicable Final brief and real Owner Decision; never reuse another head's approval.
+
+### 21.4 Historical recovery and explicit switches
+
+Completed schema-1 history is readable as originally written, never retroactively upgraded or supplemented with fictional review. In-flight work resumes its fixed old contract by default, including its original specialist obligations. Rollback restores known fixed source/artifact rules for new work; in-flight work remains pinned or uses this explicit-switch procedure. Rollback does not manufacture skipped reviews, rewrite past Briefs/Decisions or require universal historical re-review.
+
+A same-lineage in-flight switch to v2 requires an immutable `hrb-contract-transition` record using marker `hrb-contract-transition:v2` in the existing PR comments. It binds repository/PR/base, current head/state, exact source Round and effective Decision, old/new contract versions and immutable refs, a genuine Owner source statement explicitly authorizing the switch, preserved authorization scope, unresolved Finding mapping, and evidence-applicability references. `finding_map` retains every required carry-forward ID and original source Round; it cannot renumber, silently resolve or hide blockers. No source approval approves the transition's new head. Validate the source records/payloads under their own contract before trusting the transition; verify ancestry and effective new authority separately.
+
+The new v2 Round references that transition and retains same-lineage unresolved IDs in its decision scope. Ordinary v2→v2 continuation needs no new transition. Cross-repository/PR/base/stage changes require the appropriate new lineage and approved scope, never a fabricated inheritance. Splits follow section 5.2: source IDs remain external provenance, with explicit destination ownership and new applicable decisions. Unknown contracts, missing switch approval, lost findings, conflicting scope/permissions or missing evidence halt the affected gate and return to the responsible owner.
+
+### 21.5 Conformance boundary
+
+The three v2 fixtures model Final compilation/decision and an explicit v1→v2 switch. Existing v1 examples and C01–C23 keep their historical meaning unchanged. The Ruby suite executes version dispatch, schema/payload/revision recovery, exact-head routing, evidence readiness and continuity/switch negative cases. These checks validate supplied facts, not actual Git ancestry, runtime independence, the truth of technical results or real Owner authentication. A live chat→authorized persistence→read-back exercise is separate evidence; simulated Owner statements must be labelled fixtures.

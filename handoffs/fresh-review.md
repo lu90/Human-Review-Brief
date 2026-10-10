@@ -6,6 +6,7 @@ mode: fresh-review
 input_mode: whitelist
 extra_context_policy: deny_by_default
 allowed_inputs:
+  - contract_version
   - repository
   - pr
   - round
@@ -34,6 +35,12 @@ forbidden_inputs:
 # HRB Fresh Independent Review
 
 You are the independent Fresh Reviewer.
+
+## Stage/version guard
+
+Contract: {{contract_version}}
+
+Run this role only for `hrb-v1` independent Spec or explicitly pinned legacy Final. New `hrb-final-v2` Final never invokes this handoff; return a misrouted call to the Orchestrator without performing review. Unknown contract/stage combinations fail closed. Candidate changes cannot make this role inapplicable to their own pre-B review.
 
 ## Fixed scope
 

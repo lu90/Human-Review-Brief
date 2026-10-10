@@ -4,6 +4,14 @@ This file is for the human using Human Review Brief.
 
 Do not read the whole repository because HRB produced a brief. Start with the brief and expand only where the evidence justifies it.
 
+## Choose the stage/version first
+
+For an effective `hrb-final-v2` Final brief, check the exact candidate/head, current report, existing verification and Code Review evidence, unresolved findings, and concrete Owner decisions. Read the decision-ready brief in this chat; GitHub must contain the same-head brief and your actual decision, read back before routing.
+
+Dedicated eight-dimension Final coverage is no longer guaranteed, especially Operations / Observability, Performance / Compatibility and Adversarial Challenge. It is not transferred to Code Review and no equivalent coverage is promised. Final HRB does not rerun specialist review, tests or remediation verification. Missing evidence required by the effective contract goes to its responsible owner; removed dedicated coverage is not a missing-evidence gate.
+
+For `spec_review` and work still pinned to `hrb-v1`, use Gates 1–4 below, including the independent review checks. Historical records are unchanged; an in-flight switch needs your explicit contract/scope decision and preserved unresolved Finding ownership. A candidate cannot apply its proposed gates to approve itself. WORKFLOW-EVOLUTION-B remains under its pre-B contract unless separately authorized otherwise.
+
 ## Gate 1 — Scope sanity check (~1 minute)
 
 Read only **Review scope**.
@@ -100,7 +108,7 @@ Pause the review and re-scope when:
 
 When the problem is simply review size, prefer partitioning the brief by topic/module/risk cluster, or splitting the PR when the implementation itself is too broad. Do not hide lower-priority findings to make the review shorter.
 
-## Decision
+## Decision (both branches)
 
 Choose one:
 
@@ -116,7 +124,7 @@ If you later change or complete the decision, the new Review Decision Record mus
 
 Approval of an HRB is not merge permission, tracker-write permission, or any other external-write authorization.
 
-Project association adds navigation, not another approval. A small task follows its applicable route without creating unnecessary Spec/HRB records; entering HRB retains all of its gates. Keeping the same PR preserves valid history, while a split into new PRs requires their own applicable decisions. Old Finding IDs remain source provenance and old approvals do not transfer to the new scope or head.
+Project association adds navigation, not another approval. A small task follows its applicable route without creating unnecessary Spec/HRB records; entering HRB retains the gates for its effective stage/version. Keeping the same PR preserves valid history, while a split into new PRs requires their own applicable decisions. Old Finding IDs remain source provenance and old approvals do not transfer to the new scope or head.
 
 The goal is not to read everything.
 

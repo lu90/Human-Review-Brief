@@ -58,3 +58,23 @@ Deterministic self-checks execute the recovery functions rather than only checki
 `project-context.example.yaml` supplies optional context and a split-source input to those same functions. It adds executable checks for same-PR continuation/lineage, contract-set reordering, a changed entry locator, revision/addition/removal drift despite unchanged-scope flags, ready-state drift, verified legacy association, missing legacy baseline, attempted fixed-snapshot override, malformed/omitted context, project scope drift, new-PR provenance, and rejection of inherited IDs/approval/continuation across PRs. `split_source` is test input for an external ownership mapping, not an extra field on Round/Decision/Payload records. The old source ID is absent from the new PR's decision scope; the new PR uses its own Round 1. Schema-1 examples and C01–C23 remain unchanged.
 
 Run the existing command `ruby scripts/validate_contracts.rb`. These deterministic checks validate structure and routing facts supplied to the functions; the Orchestrator must still verify recovered legacy snapshots against primary approved scope and sanitize indirect project/split inputs before a live Fresh Review. No live-Agent isolation or semantic judgment is inferred from this suite.
+
+
+## Stage/version v2 extension
+
+C01–C23 and all pre-existing schema-1 examples remain unchanged and exercise independent Spec / pinned legacy behavior. New cases C24–C29 and `final-review-v2.example.yaml`, `final-decision-v2.example.yaml`, `contract-transition-v2.example.yaml` exercise the lightweight Final branch and explicit switch. Fixtures are supplied facts and simulated Owner statements, never live approval.
+
+The same Ruby command validates both versions. New Final Round records have no fresh-review, specialist coverage, testing or remediation-verification duty. The executable checks cover unknown-version rejection, stage mismatch, exact-head binding, actual marked brief-body recovery, real-source structure, partial decisions, whole revision-graph ambiguity, missing required evidence and owner routing, factual reuse, unresolved continuity and explicit-switch preservation. Actual evidence applicability, Owner identity, Git ancestry and effective authority still require source inspection by the Orchestrator.
+
+Existing public `.github/workflows/hrb-contracts.yml` runs the validator on `pull_request` and main pushes using `ubuntu-latest` with `contents: read`. CI can provide the real Ruby result after publication. If Ruby is unavailable locally, report that gap; YAML/static checks are not a Ruby pass and do not prove live-agent behavior.
+
+
+## Generated-record regressions
+
+`cases.yaml` also contains `generated_record_cases`, a bounded import of synthetic case25 and case29 outputs. Original failing record shapes and regenerated outputs retain case-relative provenance and hashes. Original public copies neutralize recorder/transport labels; before/after body hashes identify this projection and the pristine source artifact. These simulated Owner statements are never real approval.
+
+The existing Ruby command parses the actual marked comment bodies without normalizing them. Case25 exercises complete Final recovery, required-evidence and candidate-authority rejection, and the canonical Decision namespace. Its missing-verification variant remains blocked without a Decision. Case29 exercises only the persisted transition, its recovered source Round/Decision/payloads, and canonical string `current_state`; it does not invent a continuation Round or open a Final gate. A later Round still passes the full `transition_errors` binding and Finding-continuity checks.
+
+Final history regression checks scope lineage by repository, PR, stage, and base SHA. Missing or malformed base identities in the same repository/PR/stage fail closed before filtering. Older-base history permits a valid new-base Round 1; same-base resets, newer conflicting rounds, duplicate identities, malformed/unknown discovery records, missing payloads, and unverified authority remain blocked. Generated-case diagnostics are reported together before any failure. Structural and supplied-fact checks do not establish live identity, semantic evidence validity, authorization, or Git ancestry.
+
+Known identity limit: Round references do not include the base SHA. Reusing the same repository, PR, round number, and head across bases can collide with an existing durable reference and remains blocked by duplicate recovery. This fix does not change the namespace, Decision/Payload identity, or that fail-closed behavior.
