@@ -5,7 +5,7 @@ description: "Present a fixed-head, evidence-linked human decision brief. Use at
 
 # Human Review Brief
 
-Make the important decisions readable in the current chat and recoverable from the same-head GitHub records. The [Product Spec](docs/HRB-0_PRODUCT_SPEC.md) is the normative contract; this skill is its execution entry.
+Make the important decisions readable in the current chat and recoverable from the same-head GitHub records. For Chinese chat, use the [five-section presentation](handoffs/brief-compiler.md#chinese-chat-presentation) and persist the same brief. The [Product Spec](docs/HRB-0_PRODUCT_SPEC.md) is the normative contract; this skill is its execution entry.
 
 ## 1. Resolve stage and effective version
 

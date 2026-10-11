@@ -400,7 +400,7 @@ If the compiled findings are too numerous for one practical brief, HRB MUST part
 
 The first brief MUST provide an index of the partitions and total finding counts so the human can see the complete review surface. Partitioning replaces silent omission, hiding, or automatic skipping.
 
-Required structure:
+Required content is structured below. For Chinese chat, use the five-section presentation in [Brief Compiler](../handoffs/brief-compiler.md#chinese-chat-presentation) instead of these headings, preserving every applicable content requirement through summaries and explicit evidence/index links. Chat and durable payload retain the same brief text and fixed candidate; presentation does not change review, verification or Owner Decision requirements.
 
 ```markdown
 # Human Review Brief
